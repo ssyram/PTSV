@@ -1,0 +1,17 @@
+// PHORS example discont
+// if p = 0, the probability is 0, if p /= 0, the probability is 1
+
+let p = 0.01
+
+%BEGIN PAHORS type
+S : o
+F : (o -> o) -> o
+Selector : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F Selector.
+F x := x (F Selector).
+Selector x (p):= \top.
+Selector x (1-p):= x.
+%END PAHORS grammar

@@ -1,0 +1,48 @@
+// a constant language
+
+%BEGIN rPTSA config
+restriction := 2
+q0 := init
+m0 := new
+gamma0 := bot
+%END rPTSA config
+
+%BEGIN rPTSA rules
+init        new     bot     -> "a", qAGen.
+init        new     bot     -> "b", qBGen.
+
+qAGen       new     bot     -> init, genA, up gamma.
+qBGen       new     bot     -> init, genB, up gamma.
+init        new     gamma   -> "a", qAGen.
+init        new     gamma   -> "b", qBGen.
+init        new     gamma   -> qEndFirst, end, up toEnd.
+qAGen       new     gamma   -> qEndFirst, genA, up toEnd.
+qBGen       new     gamma   -> qEndFirst, genB, up toEnd.
+
+qEndFirst   new     toEnd   -> qEndFirst, end, down.
+qEndFirst   new     toEnd   -> "T", qEndT.
+qEndFirst   new     toEnd   -> qEndFirst, end, up some.
+qEndFirst   new     some    -> qEndFirst, end, up some.
+qEndT       new     toEnd   -> qEndFirst, end, down.
+
+qEndFirst   genA    gamma   -> qEndFirst, genA, down.
+qEndFirst   genB    gamma   -> qEndFirst, genB, down.
+qEndFirst   genA    bot     -> gen2.
+qEndFirst   genB    bot     -> gen2.
+qEndFirst   end     gamma   -> qEndFirst, end, down.
+gen2        genA    bot     -> "a", qUpAgain.
+gen2        genB    bot     -> "b", qUpAgain.
+qUpAgain    genA    bot     -> gen2, end, up gamma.
+qUpAgain    genB    bot     -> gen2, end, up gamma.
+gen2        genA    gamma   -> "a", qUpAgain.
+gen2        genB    gamma   -> "b", qUpAgain.
+qUpAgain    genA    gamma   -> gen2, end, up gamma.
+qUpAgain    genB    gamma   -> gen2, end, up gamma.
+qUpAgain    genA    gamma   -> gen2, end, up toEnd.
+qUpAgain    genB    gamma   -> gen2, end, up toEnd.
+gen2        end     gamma   -> qEnd, end, up toEnd.
+gen2        end     toEnd   -> qEnd, end, down.
+qEnd        end     toEnd   -> qEnd, end, down.
+qEnd        end     gamma   -> qEnd, end, down.
+qEnd        end     bot     -> \top.
+%END rPTSA rules

@@ -1,0 +1,23 @@
+// PHORS example 5.4 series
+// p1 + p2 should be less than or equal to 1
+// when p2 is 0, the value is p1
+// when p2 > 0, the value will be: (1 - sqrt(1 - 4p1p2)) / (2p2)
+// specifically, when p1 + p2 = 1:
+//      when p2 <= 1/2, the value is 1
+//      when p2 > 1/2, the value will be: p1 / p2
+
+let p1 = 0.5
+let p2 = 0.5
+
+%BEGIN PAHORS type
+S : o
+F : (o & o -> o) -> o -> o
+Selector : o & o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F Selector \top.
+F x c := x <F Selector (F Selector c), c>.
+Selector x (p1):= \pi(2) x.
+Selector x (p2):= \pi(1) x.
+%END PAHORS grammar

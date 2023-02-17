@@ -1,0 +1,30 @@
+
+%BEGIN rPTSA config
+restriction := 1
+q0 := qBack
+m0 := m0
+gamma0 := root
+%END rPTSA config
+    
+%BEGIN rPTSA rules
+(qBack, m0, root, 1, (qL, m1, up gL))
+(qBack, m1, root, 1, \top)
+(qL, m0, gL, 1/3, (qL, toVisitRight, up gL))
+(qL, m0, gL, 1 - 1/3, (qBack, leaf, down))
+(qBack, toVisitRight, gL, 1, (qL, toVisited, up gR))
+(qBack, toVisited, gL, 1, (qBack, visited, down))
+(qL, visited, gL, 1, (qL, toVisitRight, up gL))
+(qR, visited, gL, 1, (qR, toVisitLeft, up gR))
+(qBack, toVisitLeft, gL, 1, (qR, toVisited, up gL))
+(qL, leaf, gL, 1, (qBack, leaf, down))
+(qR, leaf, gL, 1, (qBack, leaf, down))
+(qL, m0, gR, 1/3, (qL, toVisitRight, up gL))
+(qL, m0, gR, 1 - 1/3, (qBack, leaf, down))
+(qBack, toVisitRight, gR, 1, (qL, toVisited, up gR))
+(qBack, toVisited, gR, 1, (qBack, visited, down))
+(qL, visited, gR, 1, (qL, toVisitRight, up gL))
+(qR, visited, gR, 1, (qR, toVisitLeft, up gR))
+(qBack, toVisitLeft, gR, 1, (qR, toVisited, up gL))
+(qL, leaf, gR, 1, (qBack, leaf, down))
+(qR, leaf, gR, 1, (qBack, leaf, down))
+%END rPTSA rules

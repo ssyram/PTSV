@@ -1,0 +1,17 @@
+// Common example: S -(p)-> SS, S -(1-p)-> \top
+// termination probability should be:
+// p <= 1/2 : P = 1
+// p > 1/2 : P = (1 - p) / p
+
+let p = 0.9
+
+%BEGIN PAHORS type
+S : o
+F : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F \top;
+F x (p):= F (F x);
+F x (1- p):= x;
+%END PAHORS grammar

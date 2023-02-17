@@ -1,0 +1,25 @@
+// example of a^nb^nc^n
+
+%BEGIN rPTSA config
+restriction := 3
+q0 := qA
+m0 := new
+gamma0 := bot
+%END rPTSA config
+
+%BEGIN rPTSA rules
+qA new bot -> "a", qUp.
+qUp new bot -> qA, continue, up g.
+qA new bot -> \top.
+qA new g -> "a", qUp.
+qUp new g -> qA, continue, up g.
+qA new g -> qB, endHere, down.
+qB continue g -> "b", qDown.
+qDown continue g -> qB, continue, down.
+qB continue bot -> "b", qC.
+qC continue bot -> "c", qUp.
+qUp continue bot -> qC, end, up g.
+qC continue g -> "c", qUp.
+qUp continue g -> qC, end, up g.
+qC endHere g -> \top.
+%END rPTSA rules

@@ -1,0 +1,567 @@
+%{
+open PTSV.Core
+open PTSV.ParserSupport
+open PTSV.Global
+open PTSV.NewEquationBuild
+open PTSV.Utils
+%}
+
+%start file
+%start linear_type
+%token < string > ID
+%token < System.Int32 > INT
+%token < PTSV.Global.NumericType > DOUBLE
+%token BEGIN END LPAREN RPAREN QUOTES NEWLINE RESTRICTION END_BLOCK_COMMENTING
+%token COMMA ASSIGN TER OMEGA LBKT RBKT
+%token MT_PAHORS MT_RPTSA MT_PPDA MT_PBPA MT_DRA  // MT: Model Type
+%token CT_CONFIG CT_RULES CT_TYPE CT_GRAMMAR CT_TOTAL CT_MAPPING  // CT: Config Type
+%token Q0 M0 GAMMA0
+%token ANDAND OROR NOT GE LE EQ NEQ
+%token CONSTRAINT
+%token EOF
+%token ERROR
+%token BEGINT ENDT BASE_TYPE IMPLY LANGLE RANGLE AND COLON END_RULE PROJECT LET PLUS MINUS MULTIPLY DIVIDE
+%token LSQRBKT RSQRBKT
+%token STAR_MARK
+
+%type < PTSV.ParserSupport.ParseResult > file
+%type < PTSV.ParserSupport.ParseType > linear_type
+
+%%
+
+file :
+    maybe_def_lines prob_model_def { produceModel $1 $2 }
+  
+// outer definition here, because if placed to def_lines, it may cause conflict between def_line and def_line \eps
+maybe_def_lines :
+    def_lines { $1 }
+  | { [] }
+  
+def_lines :
+    def_line { [$1] }
+  | def_line def_lines { $1 :: $2 }
+  | def_line END_RULE def_lines { $1 :: $3 }
+def_line :
+    LET ident ASSIGN number_expr { MDLetBinding ($2, $4) }
+  | CONSTRAINT bool_expr { MDConstraint $2 }
+    
+prob_model_def :
+    rptsadef { $1 }
+  | ppdadef { $1 }
+  | pbpadef { $1 }
+  | pahorsdef { $1 }
+  | str_gen_rptsadef { $1 }
+
+str_gen_rptsadef :
+  BEGIN MT_RPTSA CT_CONFIG
+  rptsa_config
+  END MT_RPTSA CT_CONFIG
+  BEGIN MT_RPTSA CT_RULES
+  str_gen_rptsa_rule_lines
+  END MT_RPTSA CT_RULES {
+    ModelStrGenRPTSA ($4, $11)
+  }
+
+// PAHORS definition
+// not-yet obtained macro definitions, simply pack and return the given information
+pahorsdef :
+  BEGIN MT_PAHORS CT_TYPE
+  pahors_type_def_lines
+  END MT_PAHORS CT_TYPE
+  BEGIN MT_PAHORS CT_GRAMMAR
+  pahors_rule_def_lines
+  END MT_PAHORS CT_GRAMMAR {
+    ModelPAHORS ($4, $11)
+  }
+  
+pahors_type_def_lines :
+    pahors_type_def { [$1] }
+  | pahors_type_def END_RULE { [$1] }
+  | pahors_type_def pahors_type_def_lines { $1 :: $2 }
+  | pahors_type_def END_RULE pahors_type_def_lines { $1 :: $3 }
+  
+pahors_rule_def_lines :
+    pahors_rule_def { [$1] }
+  | pahors_rule_def END_RULE { [$1] }
+  | pahors_rule_def END_RULE pahors_rule_def_lines { $1 :: $3 }
+  
+pahors_type_def :
+  ident COLON linear_type { TypeDeclPair ($1, $3) }
+
+pahors_rule_def :
+    ident ident_list LPAREN number_expr RPAREN assigns pahors_term { ParsePAHORSRule ($1, $2, $4, $7)  }
+  | ident ident_list assigns pahors_term { ParsePAHORSRule ($1, $2, (PEConst NUMERIC_ONE), $4) }
+
+pahors_term :
+    PROJECT LPAREN INT RPAREN app_term_list { PTProj ($3 - 1, $5) }  // user input should count from 1
+  | app_term_list { $1 }
+
+app_term_list :
+    non_app_term { $1 }
+  | app_term_list non_app_term { PTApp ($1, $2) }
+    
+non_app_term :
+    TER { PTIdent "\\top" }
+  | OMEGA { PTIdent "\\Omega" }
+  | ident { PTIdent $1 }
+  | LANGLE term_comma_list RANGLE { if List.length $2 = 1 then List.exactlyOne $2 else PTProd $2 }
+  | LPAREN pahors_term RPAREN { $2 }
+    
+term_comma_list :
+    pahors_term { [$1] }
+  | pahors_term COMMA term_comma_list { $1 :: $3 }
+
+// type definition, DONE
+linear_type : imply_type { $1 }
+
+imply_type :
+    product_type { unitUnwrap $1 }
+  | product_type IMPLY imply_type { PTyImpl (unitUnwrap $1, $3) }
+    
+product_type :
+    basic_type { PTyProd [$1] }
+  | basic_type AND product_type { prodMap (fun x -> $1 :: x) $3 }
+    
+basic_type :
+    BASE_TYPE { PTyBase }
+  | LPAREN imply_type RPAREN { $2 }
+
+
+
+
+
+// rPTSA definition
+rptsadef :
+  BEGIN MT_RPTSA CT_CONFIG
+  rptsa_config
+  END MT_RPTSA CT_CONFIG
+  BEGIN MT_RPTSA CT_RULES
+  rptsa_rule_lines
+  END MT_RPTSA CT_RULES {
+    ModelRPTSA ($4, $11)
+  }
+
+rptsa_config :
+  RESTRICTION ASSIGN INT
+  Q0 ASSIGN ident
+  M0 ASSIGN ident
+  GAMMA0 ASSIGN ident {
+    RPTSAConfig ($3, $6, $9, $12)
+  }
+
+str_gen_rptsa_rule_lines :
+    str_gen_rptsa_rule { [$1] }
+  | str_gen_rptsa_rule str_gen_rptsa_rule_lines { $1 :: $2 }
+
+str_gen_rptsa_rule :
+    ident COMMA ident COMMA ident IMPLY str_gen_transop END_RULE { ParseStrGenRPTSARule ($1, $3, $5, $7) }
+  | ident COMMA ident COMMA ident IMPLY QUOTES ident QUOTES COMMA ident END_RULE {
+    ParseStrGenRPTSARule ($1, $3, $5, OpTransSp (CharGen ($8, $11)))
+  }
+  | ident ident ident IMPLY str_gen_transop END_RULE { ParseStrGenRPTSARule ($1, $2, $3, $5) }
+  | ident ident ident IMPLY QUOTES ident QUOTES COMMA ident END_RULE {
+    ParseStrGenRPTSARule ($1, $2, $3, OpTransSp (CharGen ($6, $9)))
+  }
+
+str_gen_transop :
+    ident                                { OpTransState $1 }
+  | ident COMMA ident COMMA ID ident     {
+      if $5.ToLower () <> "up" then failwith "Invalid Rule Format"
+      OpTransUp ($1, $3, $6)
+  }
+  | ident COMMA ident COMMA ID           {
+      if $5.ToLower () <> "down" then failwith "Invalid Rule Format"
+      OpTransDown ($1, $3)
+  }
+  | LPAREN ident COMMA ident COMMA ID ident RPAREN     {
+      if $6.ToLower () <> "up" then failwith "Invalid Rule Format"
+      OpTransUp ($2, $4, $7)
+  }
+  | LPAREN ident COMMA ident COMMA ID RPAREN           {
+      if $6.ToLower () <> "down" then failwith "Invalid Rule Format"
+      OpTransDown ($2, $4)
+  }
+  | TER                                  { OpTransSp GenTer }
+
+rptsa_rule_lines :
+    rptsa_rule { $1 }
+  | rptsa_rule END_RULE rptsa_rule_lines { List.append $1 $3 }
+  | rptsa_rule rptsa_rule_lines { List.append $1 $2 }
+
+rptsa_rule :
+    LPAREN ident COMMA ident COMMA ident COMMA number_expr COMMA transop RPAREN { [RPTSARule ($2, $4, $6, $8, $10)] }
+  | LPAREN ident COMMA ident COMMA ident COMMA transop RPAREN { [RPTSARule ($2, $4, $6, (PEConst NUMERIC_ONE), $8)] }
+  | LPAREN ident COMMA ident COMMA ident COMMA LSQRBKT prob_state_list RSQRBKT RPAREN { 
+    flattenProbStateList $2 $4 $6 $9  // generate a list of rules according to the prob_state_list
+  }
+  
+transop :
+    ident            { OpTransState $1 }
+  | LPAREN ident COMMA ident COMMA ID ident RPAREN     {
+      if $6.ToLower () <> "up" then failwith "Invalid Rule Format"
+      OpTransUp ($2, $4, $7)
+  }
+  | LPAREN ident COMMA ident COMMA ID RPAREN         {
+      if $6.ToLower () <> "down" then failwith "Invalid Rule Format"
+      OpTransDown ($2, $4)
+  }
+  | TER              { OpTransSp SpTer }
+  | OMEGA            { OpTransSp SpDiv }
+    
+prob_state_list :
+    prob_state_item     { [ $1 ] }
+  | prob_state_item COMMA prob_state_list   { $1 :: $3 }
+
+prob_state_item :
+    LPAREN number_expr COMMA ident RPAREN      { ($2, $4) }
+  | LPAREN number_expr COLON ident RPAREN      { ($2, $4) }
+  | number_expr COLON ident                    { ($1, $3) }
+
+
+
+
+
+// pPDA definitions
+ppdadef :
+  BEGIN MT_PPDA CT_CONFIG
+  ppda_config
+  END MT_PPDA CT_CONFIG
+  BEGIN MT_PPDA CT_RULES
+  ppda_rule_list
+  END MT_PPDA CT_RULES {
+    ModelPPDA ($4, $11)
+  }
+
+ppda_config :
+  Q0 ASSIGN ident
+  GAMMA0 ASSIGN ident {
+    PPDAConfig ($3, $6)
+  }
+
+ppda_rule_list :
+    ppda_rule { [$1] }
+  | ppda_rule END_RULE ppda_rule_list { $1 :: $3 }
+  | ppda_rule ppda_rule_list { $1 :: $2 }
+
+ppda_rule :
+    LPAREN ident COMMA ident COMMA number_expr COMMA ppda_transop RPAREN { stdRuleToPPDARule $2 $4 $6 $8 }
+  | LPAREN ident COMMA ident COMMA ppda_transop RPAREN { stdRuleToPPDARule $2 $4 (PEConst NUMERIC_ONE) $6 }
+  | ident ident LPAREN number_expr RPAREN assigns ident ident_list END_RULE { PPDARule ($1, $2, $4, $7, $8) }
+  | ident ident assigns ident ident_list END_RULE { PPDARule ($1, $2, (PEConst NUMERIC_ONE), $4, $5) }
+
+ppda_transop :
+    ident { PPDATransState $1 }
+  | LPAREN ident COMMA ID ident RPAREN { if $4.ToLower () <> "push" then failwith "expecting 'push'" else PPDATransPush ($2, $5) }
+  | LPAREN ident COMMA ID RPAREN { if $4.ToLower () <> "pop" then failwith "expecting 'pop'" else PPDATransPop $2 }
+
+
+
+
+
+
+// pBPA definition
+pbpadef :
+  BEGIN MT_PBPA CT_CONFIG
+  GAMMA0 ASSIGN ident
+  END MT_PBPA CT_CONFIG
+  BEGIN MT_PBPA CT_RULES
+  pbpa_rule_list
+  END MT_PBPA CT_RULES {
+    ModelPBPA ($6, $13)
+  }
+
+pbpa_rule_list :
+    pbpa_rule { [$1] }
+  | pbpa_rule END_RULE { [$1] }
+  | pbpa_rule END_RULE pbpa_rule_list { $1 :: $3 }
+
+pbpa_rule :
+    ident LPAREN number_expr RPAREN assigns ident_list { PBPARule ($1, $3, $6) }
+  | ident assigns ident_list { PBPARule ($1, PEConst NUMERIC_ONE, $3) }
+
+
+
+acc_condition_lines :
+    acc_condition_line { [$1] }
+  | acc_condition_line END_RULE { [$1] }
+  | acc_condition_line END_RULE acc_condition_lines { $1 :: $3 }
+  | acc_condition_line acc_condition_lines { $1 :: $2 }
+  
+acc_condition_line :
+    LPAREN ident_list COMMA ident_list RPAREN { ($2, $4) }
+
+// DRA model
+dra_def :
+  BEGIN MT_DRA CT_CONFIG
+  Q0 ASSIGN ident
+  acc_condition_lines
+  END MT_DRA CT_CONFIG
+  BEGIN MT_DRA CT_RULES
+  dra_rule_lines
+  END MT_DRA CT_RULES
+  dra_rule_mappings {
+    DRAModel ($6, $14, $7, $18)
+  }
+dra_rule_lines :
+    dra_rule { [$1] }
+  | dra_rule END_RULE { [$1] }
+  | dra_rule END_RULE dra_rule_lines { $1 :: $3 }
+  | dra_rule dra_rule_lines { $1 :: $2 }
+dra_rule :
+    ident ident assigns ident { DRARule ($1, $2, $4) }
+dra_rule_mappings :
+    BEGIN MT_DRA MT_PAHORS CT_MAPPING
+    pahors_mapping_rule_list
+    END MT_DRA CT_MAPPING {
+      PAHORSMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_RPTSA CT_MAPPING
+    rptsa_mapping_rule_list
+    END MT_DRA CT_MAPPING {
+      RPTSAMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_PPDA CT_MAPPING
+    ppda_mapping_rule_list
+    END MT_DRA CT_MAPPING {
+      PPDAMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_PBPA CT_MAPPING
+    pbpa_mapping_rule_list
+    END MT_DRA CT_MAPPING {
+      PBPAMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_PAHORS CT_MAPPING
+    pahors_mapping_rule_list
+    END MT_DRA MT_PAHORS CT_MAPPING {
+      PAHORSMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_RPTSA CT_MAPPING
+    rptsa_mapping_rule_list
+    END MT_DRA MT_RPTSA CT_MAPPING {
+      RPTSAMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_PPDA CT_MAPPING
+    ppda_mapping_rule_list
+    END MT_DRA MT_PPDA CT_MAPPING {
+      PPDAMapping $ Map.ofList $5
+    }
+  | BEGIN MT_DRA MT_PBPA CT_MAPPING
+    pbpa_mapping_rule_list
+    END MT_DRA MT_PBPA CT_MAPPING {
+      PBPAMapping $ Map.ofList $5
+    }
+pahors_mapping_rule_list : 
+    pahors_mapping_rule { [$1] } 
+  | pahors_mapping_rule END_RULE { [$1] } 
+  | pahors_mapping_rule END_RULE pahors_mapping_rule_list { $1 :: $3 }
+rptsa_mapping_rule_list : 
+    rptsa_mapping_rule { [$1] } 
+  | rptsa_mapping_rule END_RULE { [$1] } 
+  | rptsa_mapping_rule END_RULE rptsa_mapping_rule_list { $1 :: $3 }
+ppda_mapping_rule_list : 
+    ppda_mapping_rule { [$1] } 
+  | ppda_mapping_rule END_RULE { [$1] } 
+  | ppda_mapping_rule END_RULE ppda_mapping_rule_list { $1 :: $3 }
+pbpa_mapping_rule_list : 
+    pbpa_mapping_rule { [$1] } 
+  | pbpa_mapping_rule END_RULE { [$1] } 
+  | pbpa_mapping_rule END_RULE pbpa_mapping_rule_list { $1 :: $3 }
+
+pahors_mapping_rule : ident assigns ident { ($1, $3) }
+rptsa_mapping_rule : 
+    ident COMMA ident COMMA ident assigns ident { (($1, $3, $5), $7) }
+  | ident ident ident assigns ident { (($1, $2, $3), $5) }
+ppda_mapping_rule :
+    ident COMMA ident assigns ident { (($1, $3), $5) }
+  | ident ident assigns ident { (($1, $2), $4) }
+pbpa_mapping_rule : ident assigns ident { ($1, $3) }
+
+// Supportive definitions
+ident :  // definition for identity avoiding capturing special symbols
+    ID { $1 }
+  | MT_PAHORS { "PAHORS" }
+  | MT_RPTSA { "rPTSA" }
+  | MT_PPDA { "pPDA" }
+  | MT_PBPA { "pBPA" }
+  | MT_DRA { "DRA" }
+  | CT_TYPE { "type" }
+  | CT_CONFIG { "config" }
+  | CT_GRAMMAR { "grammar" }
+  | CT_RULES { "rules" }
+  | CT_TOTAL { "total" }
+  | CT_MAPPING { "mapping" }
+  | BASE_TYPE { "o" }
+  | Q0 { "q0" }
+  | M0 { "m0" }
+  | GAMMA0 { "gamma0" }
+
+ident_list :
+    ident ident_list { $1 :: $2 }
+  | { [] }
+
+assigns :
+    ASSIGN { () }
+  | IMPLY { () }
+
+// expression definitions
+number :
+    DOUBLE            { PEConst $1 }
+  | INT               { PEConst $ PTSV.Global.NumericType $1 }
+
+number_expr :
+    mul_expr { $1 }
+  | number_expr PLUS mul_expr { PEOp ("+", [$1; $3]) }
+  | number_expr MINUS mul_expr { PEOp ("-", [$1; $3]) }
+mul_expr :
+    ele_expr { $1 }
+  | mul_expr MULTIPLY ele_expr { PEOp ("*", [$1; $3]) }
+  | mul_expr ele_expr { PEOp ("*", [$1; $2]) }
+  | mul_expr DIVIDE ele_expr { PEOp ("/", [$1; $3]) }
+ele_expr :
+    number { $1 }
+  | ident { PEVar $1 }
+  | LPAREN number_expr RPAREN { $2 }
+
+bool_expr :
+    bool_expr OROR and_bool_expr { PEOp ("|", [$1; $3]) }
+  | and_bool_expr { $1 }
+and_bool_expr :
+    and_bool_expr ANDAND bool_expr_element { PEOp ("&", [$1; $3]) }
+  | bool_expr_element { $1 }
+bool_expr_element :
+    number_expr cmp_op number_expr { PEOp ($2, [$1; $3]) }
+  | LPAREN bool_expr RPAREN { $2 }
+cmp_op :
+    EQ { "==" }
+  | NEQ { "/=" }
+  | LANGLE { "<" }
+  | RANGLE { ">" }
+  | LE { "<=" }
+  | GE { ">=" }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ppdadef :
+//     BEGINA
+//     ID ASSIGN ID
+//     ID ASSIGN ID
+//     ppda_rule_list
+//     ENDA {
+//         if $2 <> "q0" || $5 <> "gamma0" then
+//             failwith "Invalid Format"
+//         let qid = stateTable.refreshIndexWith $4
+//         let gammaid = gammaTable.refreshIndexWith $7
+//         PPDADef (refreshIndexInTransRuleList qid 0 gammaid $8)
+//     }
+    
+// ppda_rule_list :
+//     ppda_rule   { [$1] }
+//     | ppda_rule ppda_rule_list  { $1 :: $2 }
+
+// ppda_rule :
+//     LPAREN ID COMMA ID COMMA expr COMMA ppda_transop RPAREN {
+//         parsePPDARuleIntoPTSARule $2 $4 $6 $8
+//     }
+    
+
+// def_line:
+//     LET ID ASSIGN expr { parseBindings <- Map.add $2 $4 parseBindings }
+
+// pahorsdef :
+//     BEGINT
+//     nt_type_declare_list  // the first nt declared is the start nt
+//     ENDT
+//     BEGING
+//     pahors_rule_list
+//     ENDG {
+//         PAHORSDef
+//     }
+
+// pahors_rule_list :
+//     pahors_rule { }
+//     | pahors_rule pahors_rule_list { }
+    
+// pahors_rule :
+//     ID id_list ASSIGN LPAREN expr RPAREN pahors_term END_RULE { 
+//         recordNewRule $1 $2 $5 $7 false
+//     }
+//     | ID id_list ASSIGN pahors_term END_RULE {
+//         recordNewRule $1 $2 PTSV.Global.NUMERIC_ONE $4 false
+//     }
+//     | ID id_list ASSIGN STAR_MARK LPAREN expr RPAREN pahors_term END_RULE { 
+//         recordNewRule $1 $2 $6 $8 true
+//     }
+//     | ID id_list ASSIGN STAR_MARK pahors_term END_RULE {
+//         recordNewRule $1 $2 PTSV.Global.NUMERIC_ONE $5 true
+//     }
+
+// id_list :
+//     ID id_list { $1 :: $2 }
+//     | { [] }
+
+// nt_type_declare_list :
+//     nt_type_declare { }
+//     | nt_type_declare nt_type_declare_list { }
+    
+// nt_type_declare :
+//     ID COLON linear_type { declareNewNtType $1 $3 }
+//     | ID COLON linear_type END_RULE { declareNewNtType $1 $3 }
+    
+
+// kptsadef :
+//     BEGINA
+//     RESTRICTION ASSIGN INT
+//     ID ASSIGN ID
+//     ID ASSIGN ID
+//     ID ASSIGN ID
+//     rule_list
+//     ENDA {
+//         if $5 <> "q0" || $8 <> "m0" || $11 <> "gamma0" then
+//             failwith "Invalid Format"
+//         let qid = stateTable.refreshIndexWith $7
+//         let mid = memoryTable.refreshIndexWith $10
+//         let gammaid = gammaTable.refreshIndexWith $13
+//         KPTSADef ($4, refreshIndexInTransRuleList qid mid gammaid $14)
+//     }
+
+// rule_list :
+//     rule { $1 }
+//     | rule rule_list { List.append $1 $2 }
+
+// rule :
+//     LPAREN ID COMMA ID COMMA ID COMMA expr COMMA transop RPAREN {
+//         [(stateTable.lookUp $2,
+//           memoryTable.lookUp $4,
+//           gammaTable.lookUp $6,
+//           $8,
+//           $10)]
+//     }
+//     | LPAREN ID COMMA ID COMMA ID COMMA transop RPAREN {
+//         [(stateTable.lookUp $2,
+//           memoryTable.lookUp $4,
+//           gammaTable.lookUp $6,
+//           PTSV.Global.NUMERIC_ONE,
+//           $8)]
+//     }
+//     | LPAREN ID COMMA ID COMMA ID COMMA LSQRBKT prob_state_list RSQRBKT RPAREN {
+//         parseProbStateList
+//               (stateTable.lookUp $2)
+//               (memoryTable.lookUp $4)
+//               (gammaTable.lookUp $6)
+//               $9
+//     }
+    

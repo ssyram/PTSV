@@ -1,0 +1,26 @@
+
+%BEGIN rPTSA config
+restriction := 1
+q0 := q
+m0 := m0
+gamma0 := root
+%END rPTSA config
+    
+%BEGIN rPTSA rules
+(q, m0, root, 1, (q, m1, up gL))
+(q, m1, root, 1, \top)
+(q, m0, gL, 1/2, (q, visited_left, up gL))
+(q, m0, gL, 1 - 1/2, (q, leaf, down))
+(q, to_revisit, gL, 1/2, (q, visited_right, up gL))
+(q, to_revisit, gL, 1 - 1/2, (q, visited_right, up gR))
+(q, visited_left, gL, 1, (q, visited_right, up gR))
+(q, visited_right, gL, 1, (q, to_revisit, down))
+(q, leaf, gL, 1, (q, leaf, down))
+(q, m0, gR, 1/2, (q, visited_left, up gL))
+(q, m0, gR, 1 - 1/2, (q, leaf, down))
+(q, to_revisit, gR, 1/2, (q, visited_right, up gL))
+(q, to_revisit, gR, 1 - 1/2, (q, visited_right, up gR))
+(q, visited_left, gR, 1, (q, visited_right, up gR))
+(q, visited_right, gR, 1, (q, to_revisit, down))
+(q, leaf, gR, 1, (q, leaf, down))
+%END rPTSA rules

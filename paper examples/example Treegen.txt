@@ -1,0 +1,13 @@
+// an interesting PHORS example of triple treegen
+// the result should be (sqrt(5) - 1) / 2 = 0.618...
+
+%BEGIN PAHORS type
+S : o
+Listgen : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := Listgen \top.
+Listgen x (0.5):= x.
+Listgen x (0.5):= Listgen (Listgen (Listgen x)).
+%END PAHORS grammar

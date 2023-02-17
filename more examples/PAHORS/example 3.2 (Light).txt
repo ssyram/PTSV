@@ -1,0 +1,27 @@
+// a light version of a^nb^na^mc^n
+// the same result, but has less maximum play length in type, and thus k.
+// the result should be: (pA * pB * pC) / ((1 - pA)(1 - pA * pB * pC))
+
+let pA := 0.2  // probability of continue accepting A
+let pB := 0.3  // probability of continue accepting B
+let pC := 0.5  // probability of continue accepting C
+
+%BEGIN PAHORS type
+S : o
+A : (o -> o) -> o -> o
+B : o -> o
+C : o -> o
+WrapB : (o -> o) -> o -> o
+EndB : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S (pA):= A EndB \top.
+A f x (pA):= A (WrapB f) (C x).
+A f x (pB):= f x.
+B x (pB):= x.
+WrapB ob x := B (ob x).
+EndB (pA):= EndB.
+EndB x (pC):= x.
+C x (pC):= x.
+%END PAHORS grammar

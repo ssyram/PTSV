@@ -1,0 +1,16 @@
+
+let n = 4
+%BEGIN PAHORS type
+S : o
+F : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F \top.
+F x (1/(n+1)):= x.
+F x (1/(n+1)):= F x.
+F x (1/(n+1)):= F (F x).
+F x (1/(n+1)):= F (F (F x)).
+F x (1/(n+1)):= F (F (F (F x))).
+%END PAHORS grammar
+    

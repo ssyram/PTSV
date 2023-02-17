@@ -1,0 +1,17 @@
+// Example 4.9 from PHORS paper
+// expected result is 1/2
+
+%BEGIN PAHORS type
+S : o
+F : ((o -> o) -> o) -> o
+C : o -> (o -> o) -> o
+H : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F (C \top).
+F g := g H.
+C x f := f x.
+H x (0.5):= x.
+H x (0.5):= \Omega.
+%END PAHORS grammar

@@ -1,0 +1,27 @@
+// example for a^nb^na^mc^n
+// should be: (pA * pB * pC) / ((1 - pA)(1 - pA * pB * pC))
+
+let pA := 0.7
+let pB := 0.2
+let pC := 1 - pA - pB
+
+%BEGIN rPTSA config
+restriction := 2
+q0 := q0
+m0 := m0
+gamma0 := g0
+%END rPTSA config
+
+%BEGIN rPTSA rules
+(q0,m1,g1,pC,(q0,m0,UP g1))
+(q0,m0,g0,pA,(q0,m0,Up g1))
+(q0,m0,g0,1 - pA,Omega)
+(q0,m0,g1,pA,(q0,m0, Up g1))
+(q0,m0,g1,pB,(q1,m2, DOwn))
+(q0,m0,g1,pC,Omega)
+(q1,m0,g1,pB,(q1,m1, DOWn))
+(q1,m0,g1,1-pB, Omega)
+(q1,m0,g0,pC,(q0,m0,uP g1))
+(q1,m0,g0,pA,q1)
+(q0,m2,g1,1,\top)
+%END rPTSA rules

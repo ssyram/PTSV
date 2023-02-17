@@ -1,0 +1,15 @@
+// PHORS example listeven
+// probability should be 2/3
+
+%BEGIN PAHORS type
+S : o
+ListEvenBool : o -> o
+ListOddBool : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := ListEvenBool \top.
+ListEvenBool x (1/2):= x.
+ListEvenBool (1/2):= ListOddBool.
+ListOddBool (1/2):= ListEvenBool.
+%END PAHORS grammar

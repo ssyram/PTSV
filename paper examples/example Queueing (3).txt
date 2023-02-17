@@ -1,0 +1,39 @@
+
+%BEGIN rPTSA config
+restriction := 3
+q0 := qInit
+m0 := m0
+gamma0 := root
+%END rPTSA config
+    
+%BEGIN rPTSA rules
+(qBack, m1, root, 1/4, (qA, m2, up g))
+(qBack, m1, root, 1 - 1/4, (qB, m2, up g))
+(qBack, m2, root, 1/4, (qA, m3, up g))
+(qBack, m2, root, 1 - 1/4, (qB, m3, up g))
+(qInit, m0, root, 1, (qInit, m1, up g))
+(qBack, m3, root, 1, \top)
+(qInit, m0, g, 1/2, (qInit, mA1, up g))
+(qInit, m0, g, 1/3, (qInit, mB1, up g))
+(qInit, m0, g, 1/6, (qBack, mEnd, down))
+(qBack, mA1, g, 1, (qBack, mA1, down))
+(qBack, mB1, g, 1, (qBack, mB1, down))
+(qA, mEnd, g, 1, (qBack, mEnd, down))
+(qB, mEnd, g, 1, (qBack, mEnd, down))
+(qA, mA1, g, 1/2, (qA, mA2, up g))
+(qA, mA1, g, 1/2, \top)
+(qB, mA1, g, 1, (qB, mA2, up g))
+(qBack, mA2, g, 1, (qBack, mA2, down))
+(qB, mB1, g, 1/2, (qB, mB2, up g))
+(qB, mB1, g, 1/2, \top)
+(qA, mB1, g, 1, (qA, mB2, up g))
+(qBack, mB2, g, 1, (qBack, mB2, down))
+(qA, mA2, g, 2/3, (qA, mA3, up g))
+(qA, mA2, g, 1/3, \top)
+(qB, mA2, g, 1, (qB, mA3, up g))
+(qBack, mA3, g, 1, (qBack, mA3, down))
+(qB, mB2, g, 2/3, (qB, mB3, up g))
+(qB, mB2, g, 1/3, \top)
+(qA, mB2, g, 1, (qA, mB3, up g))
+(qBack, mB3, g, 1, (qBack, mB3, down))
+%END rPTSA rules

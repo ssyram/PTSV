@@ -1,0 +1,13 @@
+
+let p = 1/4
+
+%BEGIN PAHORS type
+S : o
+F : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := \top.
+F x (p):= x.
+F x (1-p):= F (F x).
+%END PAHORS grammar

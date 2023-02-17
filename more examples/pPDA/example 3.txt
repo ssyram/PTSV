@@ -1,0 +1,15 @@
+// a PPDA version of S -(p)-> SS, S -(1-p)-> tt
+
+let p = 0.9
+
+%BEGIN pPDA config
+q0 = q0
+gamma0 = g0
+%END pPDA config
+
+%BEGIN pPDA rules
+(q0, g0, 1, (q, push g))
+(q, g0, 1, (q, pop))
+(q, g, p, (q, push g))
+(q, g, 1 - p, (q, pop))
+%END pPDA rules

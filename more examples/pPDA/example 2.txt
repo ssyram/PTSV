@@ -1,0 +1,18 @@
+// a test example of looping
+// result should be: p1 / (p1 + p2)
+
+let p1 = 0.6
+let p2 = 0.2
+
+%BEGIN pPDA config
+q0 = q0
+gamma0 = g0
+%END pPDA config
+
+%BEGIN pPDA rules
+(q0, g0, 1, (q0, push g))
+(q0, g, 1 - p1 - p2, (q0, pop))
+(q0, g, p1, (qt, pop))
+(qt, g, 1, (qt, pop))
+(qt, g0, 1, (qt, pop))
+%END pPDA rules

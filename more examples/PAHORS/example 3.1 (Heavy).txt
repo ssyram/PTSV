@@ -1,0 +1,30 @@
+// example for: a^nb^na^mc^n
+// require p specification in command line.
+// or, uncommenting the following lines
+// the right result should be: (pA * pB * pC) / ((1 - pA)(1 - pA * pB * pC))
+
+let pA := 0.5  // probability of continue accepting A
+let pB := 0.25  // probability of continue accepting B
+let pC := 0.25  // probability of continue accepting C
+
+%BEGIN PAHORS type
+S : o
+A : ((o -> o) -> o -> o) -> o
+B : (o -> o) -> o -> o
+WrapB : ((o -> o) -> o -> o) -> (o -> o) -> o -> o
+EndB : (o -> o) -> o -> o
+C : o -> o
+Id : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S (pA):= A EndB.  // \Omega is not shown
+A ob (pA):= A (WrapB ob).
+A b (pB):= b Id \top.     // trigger
+B c y (pB):= c (C y).
+WrapB ob f := B (ob f).
+EndB (pA):= EndB.
+EndB g x (pC):= g x.
+C x (pC):= x.
+Id x := x.
+%END PAHORS grammar

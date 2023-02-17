@@ -1,0 +1,47 @@
+// A special example that is not expressible by order-2 PHORS
+
+(*
+This example is the probabilistic version of the language {w#w#w}
+    where w is the Dyck language D := \varepsilon | [D]D
+
+Our probabilistic version is mostly the example 2 of k-PTSA
+It is possible to express any word of this language with some probability
+when p >= 1/2, the termination probability is 1
+when p < 1/2, the termination probability is p / (1 - p)
+*)
+
+let p = 0.9
+
+%BEGIN PAHORS type
+S : o
+D : ((o -> o) -> (o -> o) -> (o -> o) -> o) -> o
+K : (o -> o) -> (o -> o) -> o -> o
+I : o -> o
+HashSym : o -> o  // stands for '#'
+LSqrBkt : o -> o  // stands for '['
+RSqrBkt : o -> o  // stands for ']'
+Constructor : (o -> o) -> (o -> o) -> (o -> o) -> o
+FirstLevel : ((o -> o) -> (o -> o) -> (o -> o) -> o) -> (o -> o) -> (o -> o) -> (o -> o) -> o
+SecondLevel :
+    ((o -> o) -> (o -> o) -> (o -> o) -> o) -> 
+    (o -> o) -> (o -> o) -> (o -> o) -> 
+    (o -> o) -> (o -> o) -> (o -> o) -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := D Constructor.
+Constructor x y z := x (HashSym (y (HashSym (z \top)))).
+K x y v := LSqrBkt (x (RSqrBkt (y v))).
+LSqrBkt x := x.
+RSqrBkt x := x.
+HashSym x := x.
+I v := v.
+D f (p):= f I I I.
+D f (1 - p):= D (FirstLevel f).
+
+FirstLevel f x1 y1 z1 :=
+    D (SecondLevel f x1 y1 z1).
+    
+SecondLevel f x1 y1 z1 x2 y2 z2 :=
+    f (K x1 x2) (K y1 y2) (K z1 z2).
+%END PAHORS grammar

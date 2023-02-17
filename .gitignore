@@ -1,0 +1,9 @@
+.idea
+.idea/*
+.git
+.git/*
+PTSV/bin/*
+.DS_Store
+*/.DS_Store
+PTSV/obj/*
+*.output

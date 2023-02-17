@@ -1,0 +1,36 @@
+// example for {ww | w \in (A|B)*} 
+// termination probability should be: pT + (pT^2 * (pA^2 + pB^2)) / (1 - (pA^2 + pB^2))
+
+let pA := 0.7
+let pB := 0.2
+let pT := 1 - pA - pB
+
+%BEGIN rPTSA config
+restriction := 2
+q0 := q0
+m0 := m0
+gamma0 := g0
+%END rPTSA config
+
+%BEGIN rPTSA rules
+// initial
+(q0, m0, g0, pA, (q0, mA, up g1))
+(q0, m0, g0, pB, (q0, mB, up g1))
+(q0, m0, g0, pT, (qT, mT, up gT))
+(q0, m0, g1, pA, (q0, mA, up g1))
+(q0, m0, g1, pB, (q0, mB, up g1))
+(q0, m0, g1, pT, (qD, mT, down ))
+(qD, mA, g1, 1,  (qD, mA, down ))
+(qD, mB, g1, 1,  (qD, mB, down ))
+(qD, mA, g0, pA, (qS, mE, up g1))
+(qD, mB, g0, pB, (qS, mE, up g1))
+(qS, mA, g1, pA, (qS, mE, up g1))
+(qS, mB, g1, pB, (qS, mE, up g1))
+(qS, mT, g1, pT, (qE, mT, down ))
+(qE, mE, g1, 1,  (qE, mT, down ))
+(qE, mE, g0, 1,  (qT, mT, up gE))
+
+// termination
+(qT, m0, gT, 1,  \top)
+(qT, m0, gE, 1,  \top)
+%END rPTSA rules

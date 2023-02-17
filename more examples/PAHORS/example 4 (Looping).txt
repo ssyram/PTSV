@@ -1,0 +1,18 @@
+// this is an example for repeatedly going up and down
+// which is essentially a translation of an infinite loop of PDA:
+// (q, gamma0) -> (q, push gamma), (q, gamma) -> (q, down)
+// the termination probability is clearly 0, but it hereby illustrates how restricted TSA tackles infinite loops
+
+%BEGIN PAHORS type
+S : o
+F_q0g0 : o -> o
+F_q0g1 : o -> o
+bot : o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F_q0g0 bot.
+F_q0g0 x := F_q0g1 (F_q0g0 x).
+F_q0g1 x := x.
+bot := \Omega.
+%END PAHORS grammar

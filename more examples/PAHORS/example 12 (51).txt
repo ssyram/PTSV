@@ -1,0 +1,17 @@
+// PHORS example treegen_even
+// p = 1/2 should have probability 1 - (1 / sqrt(2))
+// p = 0.49 should have probability 0.2774...
+// p = 0.51 should have probability 0.2887...
+
+let p = 0.51
+
+%BEGIN PAHORS type
+S : o
+F : o & o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F <\top, \Omega>.
+F x (p):= \pi(2) x.
+F x (1 - p):= F <F x, F <\pi(2) x, \pi(1) x>>.
+%END PAHORS grammar

@@ -1,0 +1,20 @@
+// a variant of example 4.8 from P-HORS
+// it is impossible to express the same result as the original example
+// because it involves expressing H for 2^n times, we then changed the example to the one expressible by PAHORS
+// result should be: (1/2)^2 + (1/2)^4 + ... + (1/2)^{2i} + ... = 1/3
+
+%BEGIN PAHORS type
+S : o
+H : o -> o
+F : (o -> o) -> o
+D : (o -> o) -> (o -> (o))
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F H.
+H x (0.5):= x.
+H x (0.5):= \Omega.
+F g (0.5):= g \top.
+F g (0.5):= F (D g).
+D g x := g (H x).
+%END PAHORS grammar

@@ -1,0 +1,29 @@
+// example for S -(p)-> SS, S -(1 - p)-> tt
+// termination probability should be:
+// p <= 1/2 : P = 1
+// p > 1/2 : P = (1 - p) / p
+
+let p = 0.3
+
+%BEGIN rPTSA config
+Restriction := 1
+q0 := q0
+m0 := m0
+gamma0 := gamma0
+%END rPTSA config
+
+
+%BEGIN rPTSA rules
+(q0, m0, gamma0, 1 - p, \top)
+(q0, m0, gamma0, p, (q0, m1, Up gamma1))
+(q0, m0, gamma1, 1 - p, (q0, m3, Down))
+(q0, m0, gamma1, p, (q0, m1, Up gamma1))
+(q0, m0, gamma2, 1 - p, (q0, m3, Down))
+(q0, m0, gamma2, p, (q0, m1, Up gamma1))
+(q0, m1, gamma0, 1, (q0, m2, Up gamma2))
+(q0, m1, gamma1, 1, (q0, m2, Up gamma2))
+(q0, m1, gamma2, 1, (q0, m2, Up gamma2))
+(q0, m2, gamma0, 1, \top)
+(q0, m2, gamma1, 1, (q0, m3, Down))
+(q0, m2, gamma2, 1, (q0, m3, Down))
+%END rPTSA rules

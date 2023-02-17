@@ -1,0 +1,18 @@
+// PHORS example determinize, the simpler version.
+// Note that the complex version showing for any p > 0, the termination probability is 1
+//      cannot be expressed in PAHORS.
+
+let p = 1/2
+
+%BEGIN PAHORS type
+S : o
+Determinize : (o & o -> o) -> o
+Selector : o & o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+Determinize prob := prob <\top, Determinize Selector>.
+S := Determinize Selector.
+Selector x (p):= \pi(1) x.
+Selector x (1 - p):= \pi(2) x.
+%END PAHORS grammar

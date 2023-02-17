@@ -1,0 +1,23 @@
+// PHORS example listeven2
+// probability should be 3/4
+
+let p1 = 1/2
+let p2 = 1/2
+
+%BEGIN PAHORS type
+S : o
+ListEven : (o & o -> o) -> o -> o
+ListOdd : (o & o -> o) -> o -> o
+Selector : o & o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := ListEven Selector \top.
+ListEven x c (1/2):= c.
+// x should have p1 probability execute the first dimension, and p2 for the sec
+ListEven x c (1/2):= x <ListOdd Selector c, ListEven Selector c>.
+ListOdd x c (1/2):= x <ListOdd Selector c, ListEven Selector c>.
+Selector x (p1):= \pi(1) x.
+Selector x (p2):= \pi(2) x.
+%END PAHORS grammar
+

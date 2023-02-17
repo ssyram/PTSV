@@ -1,0 +1,109 @@
+{
+open FSharp.Text.Lexing
+open PTSV.Core
+open Parser
+
+let mutable commenting = false
+}
+
+let alphabet = (['a' - 'z'] | ['A' - 'Z'] | '_' | ''')
+let digit = ['0'-'9']
+let whitespace = [' ' '\t' ]
+let newline = ('\n' | '\r' '\n')
+
+rule token = parse
+| whitespace                            { token lexbuf }
+| newline                               {
+    lexbuf.EndPos <- lexbuf.EndPos.NextLine;
+    if commenting = true then NEWLINE else token lexbuf
+}
+| "q0"                                  { Q0 }
+| "\""                                  { QUOTES }
+| "m0"                                  { M0 }
+| "gamma0"                              { GAMMA0 }
+| "restriction"                         { RESTRICTION }
+| "RESTRICTION"                         { RESTRICTION }
+| "Restriction"                         { RESTRICTION }
+| "%BEGIN"                              { BEGIN }
+| "%END"                                { END }
+| "PAHORS"                              { MT_PAHORS }
+| "rPTSA"                               { MT_RPTSA }
+| "pPDA"                                { MT_PPDA }
+| "pBPA"                                { MT_PBPA }
+| "DRA"                                 { MT_DRA }
+| "PAHORS"                              { MT_PAHORS }
+| "RPTSA"                               { MT_RPTSA }
+| "PPDA"                                { MT_PPDA }
+| "PBPA"                                { MT_PBPA }
+| "pahors"                              { MT_PAHORS }
+| "rptsa"                               { MT_RPTSA }
+| "ppda"                                { MT_PPDA }
+| "pbpa"                                { MT_PBPA }
+| "dra"                                 { MT_DRA }
+| "type"                                { CT_TYPE }
+| "grammar"                             { CT_GRAMMAR }
+| "config"                              { CT_CONFIG }
+| "rules"                               { CT_RULES }
+| "mapping"                             { CT_MAPPING }
+| "total"                               { CT_TOTAL }
+| "constraint"                          { CONSTRAINT }
+| "("                                   { LPAREN }
+| ")"                                   { RPAREN }
+| "(*)"                                 { STAR_MARK }
+| "\\pi"                                { PROJECT }
+| "<"                                   { LANGLE }
+| ">"                                   { RANGLE }
+| "o"                                   { BASE_TYPE }
+| "->"                                  { IMPLY }
+| "-o"                                  { IMPLY }
+| ":"                                   { COLON }
+| "+"                                   { PLUS }
+| "-"                                   { MINUS }
+| "*"                                   { MULTIPLY }
+| "/"                                   { DIVIDE }
+| "let"                                 { LET }
+| "."                                   { END_RULE }
+| "["                                   { LSQRBKT }
+| "{"                                   { LBKT }
+| "}"                                   { RBKT }
+| "]"                                   { RSQRBKT }
+| ";"                                   { END_RULE }
+| "&"                                   { AND }
+| "&&"                                  { ANDAND }
+| "||"                                  { OROR }
+| "!"                                   { NOT }
+| "~"                                   { NOT }
+| ">="                                  { GE }
+| "<="                                  { LE }
+| "=="                                  { EQ }
+| "!="                                  { NEQ }
+| "/="                                  { NEQ }
+| "<>"                                  { NEQ }
+| "(*"                                  {
+        if commenting then AND  // just for returning something
+        else
+            commenting <- true;
+            while (token lexbuf) <> END_BLOCK_COMMENTING do ();
+            commenting <- false;
+            token lexbuf
+    }
+| "*)"                                  { END_BLOCK_COMMENTING }
+| "//"                                  {
+        if commenting then AND  // just for returning something
+        else
+            commenting <- true;
+            while (token lexbuf) <> NEWLINE do ();
+            commenting <- false;
+            token lexbuf
+    }
+| ","                                   { COMMA }
+| "="                                   { ASSIGN }
+| ":="                                  { ASSIGN }
+| "\\top"                               { TER }
+| "\\omega"                             { OMEGA }
+| "\\Omega"                             { OMEGA }
+| alphabet(alphabet|digit)*             { ID (System.String lexbuf.Lexeme) }
+| ['-']?digit+                                  { INT (System.Int32.Parse(System.String lexbuf.Lexeme)) }
+| ['-']?digit+('.'digit+)?(['e''E']digit+)?     { DOUBLE (PTSV.Global.NumericType.Parse(System.String lexbuf.Lexeme)) }
+| _              { ERROR }
+| eof            { EOF }

@@ -1,0 +1,25 @@
+// Complex version of Determinize in PHORS example
+
+
+
+%BEGIN PAHORS type
+S : o
+One : o & o -> o
+Zero : o & o -> o
+Determinize : (o & o -> o) -> o
+Avg : (o & o -> o) & (o & o -> o) -> o & o -> o
+ForallP : (o & o -> o) & (o & o -> o) -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S (1/2):= Determinize One.
+S (1/2):= ForallP <Zero, One>.
+Determinize selector := selector <\top, ForallP <Zero, One>>.
+Zero xy := \pi(2) xy.
+One xy := \pi(1) xy.
+Avg x (1/2):= \pi(1) x.
+Avg x (1/2):= \pi(2) x.
+ForallP pq (1/2):= Determinize (Avg pq).
+ForallP pq (1/4):= ForallP <\pi(1) pq, Avg pq>.
+ForallP pq (1/4):= ForallP <Avg pq, \pi(2) pq>.
+%END PAHORS grammar

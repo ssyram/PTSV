@@ -1,0 +1,12 @@
+
+%BEGIN PAHORS type
+S : o
+F : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F \top.
+F x (0.5):= x.
+F x (0.5):= F (F x).
+%END PAHORS grammar
+    

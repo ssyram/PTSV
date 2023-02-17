@@ -1,0 +1,28 @@
+// Example 9 in the paper
+// modifications made to make sure expected termination time is the same
+// Expected Termination Time should be: (read the following as a fraction)
+//               5
+// ----------------------------- + 1
+// pH * (1 - pP) + (1 - pH) * pP
+
+let pH = 0.5
+let pP = 0.5
+
+%BEGIN PAHORS type
+S : o
+F : (o & o -> o) -> o
+// introduce selectors to make expected termination time be the same
+FSelector : o -> o -> o
+U : o & o -> o
+USelector : o & o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F U.
+U := USelector.
+USelector x (pH):= \pi(1) x.
+USelector x (1 - pH):= \pi(2) x.
+F f := f <FSelector (F U) \top, FSelector \top (F U)>.
+FSelector x y (pP):= x.
+FSelector x y (1 - pP):= y.
+%END PAHORS grammar

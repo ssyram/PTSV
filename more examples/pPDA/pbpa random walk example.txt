@@ -1,0 +1,14 @@
+
+let p = 1/2
+
+%BEGIN pBPA config
+gamma0 := bot
+%END pBPA config
+
+%BEGIN pBPA rules
+bot (p) -> X bot.
+bot (p) -> .
+X (p) -> X X.
+X (1 - p) -> .
+%END pBPA rules
+

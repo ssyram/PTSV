@@ -1,0 +1,14 @@
+
+%BEGIN PAHORS type
+S : o
+Listgen : o -> o
+Boolgen : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := Listgen \top.
+Listgen x (0.5):= x.
+Listgen x (0.5):= Boolgen (Listgen x).
+Boolgen x (0.5):= x.
+Boolgen x (0.5):= Boolgen x.
+%END PAHORS grammar

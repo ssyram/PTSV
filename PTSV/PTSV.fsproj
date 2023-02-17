@@ -1,0 +1,157 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net6.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FsLexYacc" Version="10.2.0" />
+        <FsYacc Include="Parser.fsy">
+            <OtherFlags>--module Parser -v</OtherFlags>
+        </FsYacc>
+        <FsLex Include="Lexer.fsl">
+            <OtherFlags>--module Lexer --unicode</OtherFlags>
+        </FsLex>
+        <PackageReference Include="ScottPlot" Version="4.1.58" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Z3" Version="4.11.2" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Rationals" Version="2.0.0" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <Compile Include="Global.fs" />
+        <Compile Include="Utils.fs" />
+        <Compile Include="ShortAlgorithms.fs" />
+        <Compile Include="Core.fs" />
+        <Compile Include="MultipleContextFreeGrammar.fs" />
+        <Compile Include="NewEquationBuild.fs" />
+        <Compile Include="RecursiveMarkovChain.fs" />
+        <Compile Include="ParserSupport.fs" />
+        <Compile Include="Parser.fsi" />
+        <Compile Include="Parser.fs" />
+        <Compile Include="Lexer.fs" />
+        <Compile Include="Translation.fs" />
+        <Compile Include="Pahors2KptsaImpl.fs" />
+        <Compile Include="Pahors2GeneralRptsa.fs" />
+        <Compile Include="Output.fs" />
+        <Compile Include="Input.fs" />
+        <Compile Include="Problems.fs" />
+        <Compile Include="ExampleGenerators.fs" />
+        <Compile Include="PAHORSExampleGenerator.fs" />
+        <Compile Include="Run.fs" />
+        <Compile Include="Externals.fs" />
+        <Compile Include="Test.fs" />
+        <Compile Include="Program.fs" />
+        <Folder Include="test_logs" />
+        <Content Include="paper examples\example PAHORS NTreegen (7).txt" />
+        <Content Include="paper examples\example PAHORS VTreegen (2).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (4).txt" />
+        <Content Include="paper examples\example Queueing(A) (10).txt" />
+        <Content Include="paper examples\example Discont(0.01, 0.99).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (7).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (7).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (11).txt" />
+        <Content Include="paper examples\example Queueing (6).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (10).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (8).txt" />
+        <Content Include="paper examples\example Random Paths (1).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (9).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (20).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (11).txt" />
+        <Content Include="paper examples\example Ex2.3.txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (10).txt" />
+        <Content Include="paper examples\example Queueing (7).txt" />
+        <Content Include="paper examples\example Queueing(A) (50).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (6).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (6).txt" />
+        <Content Include="paper examples\example TreeEven(0.5).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (5).txt" />
+        <Content Include="paper examples\example Queueing(A) (100).txt" />
+        <Content Include="paper examples\example PAHORS VTreegen (3).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (6).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (100).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (1).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (1).txt" />
+        <Content Include="paper examples\example Random Paths (12).txt" />
+        <Content Include="paper examples\example Ex5.4(0, 0).txt" />
+        <Content Include="paper examples\example Random Paths (7).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (500).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (50).txt" />
+        <Content Include="paper examples\example Printer.txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (1).txt" />
+        <Content Include="paper examples\example PAHORS VTreegen (4).txt" />
+        <Content Include="paper examples\example Queueing(A) (20).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (2).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (11).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (3).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (10).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (10).txt" />
+        <Content Include="paper examples\example Random Paths (6).txt" />
+        <Content Include="paper examples\example TreeEven(0.51).txt" />
+        <Content Include="paper examples\example Queueing (1).txt" />
+        <Content Include="paper examples\example Random Paths (13).txt" />
+        <Content Include="paper examples\example Example 4.9.txt" />
+        <Content Include="paper examples\example Random Paths (5).txt" />
+        <Content Include="paper examples\example Ex5.4(0.5, 0.5).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (14).txt" />
+        <Content Include="paper examples\example Queueing (2).txt" />
+        <Content Include="paper examples\example Random Paths (10).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (3).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (3).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (200).txt" />
+        <Content Include="paper examples\example Random Paths (9).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (13).txt" />
+        <Content Include="paper examples\example Queueing(A) (200).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (3).txt" />
+        <Content Include="paper examples\example Listgen.txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (2).txt" />
+        <Content Include="paper examples\example TreeEven(0.49).txt" />
+        <Content Include="paper examples\example Random Paths (8).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (12).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (1).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (2).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (2).txt" />
+        <Content Include="paper examples\example Random Paths (11).txt" />
+        <Content Include="paper examples\example Queueing (3).txt" />
+        <Content Include="paper examples\example Random Paths (4).txt" />
+        <Content Include="paper examples\example ListEven2.txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (6).txt" />
+        <Content Include="paper examples\example Treegen.txt" />
+        <Content Include="paper examples\example Queueing (8).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (5).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (9).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (9).txt" />
+        <Content Include="paper examples\example Random Paths (3).txt" />
+        <Content Include="paper examples\example ListEven.txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (12).txt" />
+        <Content Include="paper examples\example Queueing (4).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (13).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (9).txt" />
+        <Content Include="paper examples\example Queueing (10).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (5).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (5).txt" />
+        <Content Include="paper examples\example Repeated L Traversal (1d3) (1000).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (4).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (4).txt" />
+        <Content Include="paper examples\example Queueing (11).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (8).txt" />
+        <Content Include="paper examples\example Queueing (5).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (12).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (13).txt" />
+        <Content Include="paper examples\example Random Paths (2).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d3) (8).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (1d2) (8).txt" />
+        <Content Include="paper examples\example PAHORS NTreegen (4).txt" />
+        <Content Include="paper examples\example PAHORS VTreegen (1).txt" />
+        <Content Include="paper examples\example Ex5.4(0.3, 0.3).txt" />
+        <Content Include="paper examples\example Queueing (9).txt" />
+        <Content Include="paper examples\example Repeated LR Traversal (2d3) (7).txt" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+// Example 8 in the paper
+// modification done to make sure expected termination time is the same
+// the theoretical expected termination time is: 176/21
+
+let p1 = 0.5
+let p2 = 0.5
+let p3 = 0.5
+
+%BEGIN PAHORS type
+S : o
+I : o -> o
+F : (o -> o) -> o
+G : (o -> o) -> o -> o
+// we add selectors to make probabilistic choice explicitly counted
+FSelector : (o -> o) -> o
+GSelector : (o -> o) -> o -> o
+Selector : o -> o
+%END PAHORS type
+
+%BEGIN PAHORS grammar
+S := F (G I).
+I x := x.
+F := FSelector.
+FSelector f (p1):= F (G f).
+FSelector f (1 - p1):= f \top.
+G := GSelector.
+GSelector f x (p2):= f (Selector x).
+GSelector f x (1 - p2):= \top.
+Selector x (p3):= x.
+Selector x (1 - p3):= \top.
+%END PAHORS grammar
