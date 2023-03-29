@@ -74,6 +74,16 @@ A file consists of three parts:
 %END PAHORS grammar
 ```
 
+#### `<term>` format
+
+Termination symbol: `\top`, of type `o`.
+
+Projection symbol: `\pi(<number>)`, where `<number>` counts from `1`.
+
+Pairing (Grouping) symbol: `'<' <terms seperated by ','> '>'`.
+
+The `<term>` part supports head-normal application terms of lambda-calculus, projections and pairing (grouping).
+
 ### rPTSA
 
 #### General format
