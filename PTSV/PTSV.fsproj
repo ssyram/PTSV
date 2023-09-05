@@ -31,6 +31,7 @@
         <Compile Include="Core.fs" />
         <Compile Include="MultipleContextFreeGrammar.fs" />
         <Compile Include="NewEquationBuild.fs" />
+        <Compile Include="ProbabilisticPushDownAutomaton.fs" />
         <Compile Include="RecursiveMarkovChain.fs" />
         <Compile Include="ParserSupport.fs" />
         <Compile Include="Parser.fsi" />

@@ -235,6 +235,9 @@ let rec argumentAnalysis argv =
             Flags.ETT_APPROXIMATION <- false
             Flags.ETT_QUALITATIVE <- false
         argumentAnalysis l
+    | "-ppda" :: l ->
+        Flags.DIRECT_PPDA <- true
+        argumentAnalysis l
     | "-ett" :: l ->
         inTpMode <- false
         if not ettSpecified then

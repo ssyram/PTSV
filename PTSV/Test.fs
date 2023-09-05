@@ -224,7 +224,7 @@ let tryRunREDUCEProgram () =
 
 /// Passed
 let testIteratingApproximation () =
-    let approx = Run.runFromKPTSA (genSampleKPTSA2 (NumericType.Parse "0.49"))
+    let approx = Run.runFromAutomaton $ Run.RMKPTSA (genSampleKPTSA2 (NumericType.Parse "0.49"))
     printfn $"Approximation Number is {approx}"
 
 /// Passed

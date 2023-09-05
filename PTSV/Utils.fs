@@ -1020,3 +1020,7 @@ let rec positiveOuterBisection accuracy isLe lower upper =
     if not $ isLe upper then positiveOuterBisection accuracy isLe upper (2 * upper)
     else bisectionApproximation lower upper accuracy isLe
     
+    
+let collectToMap lst =
+    Map.ofList $ aggregateList id lst
+    

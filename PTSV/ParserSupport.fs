@@ -6,6 +6,7 @@ open PTSV.Core
 open PTSV.Global
 open PTSV.NewEquationBuild
 open PTSV.Utils
+open PTSV.ProbabilisticPushDownAutomaton
 
 let DUMMY_PBPA_TO_PPDA_STATE = "$"
 
@@ -752,6 +753,7 @@ type ModelDef =
     | KPTSADef of KPTSA
     | PPDADef of KPTSA
     | PBPADef of KPTSA
+    | DirectPPDADef of ProbPDAut<State, Gamma>
     | PAHORSDef of PAHORS
     
 type ParseResult =
@@ -759,6 +761,38 @@ type ParseResult =
         macros    : Map<string,NumericType> *
         probModel : ModelDef
         // mapping information will be saved in Global.Flags.RPTSA_DRA_MAPPING
+    
+let toDirectPPDA
+        macroDefs
+        (PPDAConfig (q0, gamma0))
+        (rules : PPDARule<string,string> list) =
+    let qMap = IndexingTable () in
+    let xMap = IndexingTable () in
+    let mapper (PPDARule (q, x, prob, q', xs)) =
+        ((qMap.lookUp q,
+          xMap.lookUp x),
+        (prob.eval macroDefs,
+         qMap.lookUp q',
+         List.map xMap.lookUp xs))
+    in
+    let rules = collectToMap $ List.map mapper rules in
+    let initSt = qMap.lookUp q0 in
+    let botX = xMap.lookUp gamma0 in
+    Flags.KPTSA_Q_PRINT_TABLE <- revMap $ qMap.getRawMap ();
+    Flags.KPTSA_G_PRINT_TABLE <- revMap $ xMap.getRawMap ();
+    { ppdaRules = rules
+      ppdaInitSt = initSt
+      ppdaBotX = botX }
+    
+let pBPAToDirectPPDA macroDefs gamma0 pbpaRules =
+    let rules =
+        flip List.map pbpaRules $ fun (PBPARule (X, prob, Xs)) ->
+            PPDARule (DUMMY_PBPA_TO_PPDA_STATE, X,
+                      prob,
+                      DUMMY_PBPA_TO_PPDA_STATE, Xs)
+    in
+    toDirectPPDA macroDefs (PPDAConfig (DUMMY_PBPA_TO_PPDA_STATE, gamma0)) rules
+    
     
     
     
@@ -943,16 +977,22 @@ let produceModel defs (probModel : ParseModel) =
             Flags.CHECK_K <- false;
             // qX |-> s
             let maybeMap = flip Option.map draMapping $
-                               function | PPDAMapping map -> map | _ -> errorMappingNonMatched () in
-            PPDADef $ pPDAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs ppdaConfig ppdaRules
+                            function | PPDAMapping map -> map | _ -> errorMappingNonMatched () in
+            if Flags.DIRECT_PPDA then
+                DirectPPDADef $ toDirectPPDA macroDefs ppdaConfig ppdaRules
+            else
+                PPDADef $ pPDAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs ppdaConfig ppdaRules
         | ModelPBPA (gamma0, pbpaRules) ->
             resultPrint $ RReadFormat "pBPA";
             Flags.CHECK_K <- false;
             // X |-> s
             let maybeMap = flip Option.map draMapping $
-                               function | PBPAMapping map -> map | _ -> errorMappingNonMatched () in
+                            function | PBPAMapping map -> map | _ -> errorMappingNonMatched () in
             processPrint "Add dummy pPDA control state: \"$\"..."
-            PBPADef $ pBPAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs gamma0 pbpaRules
+            if Flags.DIRECT_PPDA then
+                DirectPPDADef $ pBPAToDirectPPDA macroDefs gamma0 pbpaRules
+            else
+                PBPADef $ pBPAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs gamma0 pbpaRules
     in
     ParseResult (macroDefs, model)
     
@@ -971,6 +1011,7 @@ let produceModel defs (probModel : ParseModel) =
 type Model =
     | MKPTSA of KPTSA
     | MPAHORS of PAHORS
+    | MPPDA of ProbPDAut<State, Gamma>
     | MSTRRPTSA of GeneralRPTSA<string, string, string, CharGen<string, string>>
 
 /// the three tables for text kPTSA input analysis, should be clear before every analysis

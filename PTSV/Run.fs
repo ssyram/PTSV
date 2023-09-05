@@ -19,7 +19,6 @@ open Microsoft.FSharp.Core
 open Microsoft.FSharp.Reflection
 open PTSV
 open PTSV.Core
-open PTSV.Global
 open PTSV.Input
 open PTSV.NewEquationBuild
 open PTSV.Problems
@@ -29,6 +28,7 @@ open ExampleGenerators
 open MultipleContextFreeGrammar
 open Utils
 open PAHORSExampleGenerator
+open PTSV.ProbabilisticPushDownAutomaton
 
 let printFormulaSystem lst =
     if Flags.NOT_PRINT_EQ_SYS then ""
@@ -204,17 +204,26 @@ let checkPositiveAlmostSureTermination incremental needApproxValue kptsa =
             else computeValue ()
         else None
 
+type RunModel =
+    | RMKPTSA of KPTSA
+    | RMPPDA of ProbPDAut<State, Gamma>
+    
+type ReuseContext =
+    | RC_RPTSA of BuildContext<State,LocalMemory,Gamma,TerOp>
+    | RC_PPDA of (EqVar<State,Gamma> * PpdaRHS<State,Gamma> list) list
+
 type RunningContext =
     {
         translateFrom : string option
         translationTime : TimeSpan option
         
-        kptsa : KPTSA
+        model : RunModel
+        reuseCtx : ReuseContext option
+        
         tpPrimitiveEqSys :
             (Variable<State,Gamma> * RawFormula<Variable<State,Gamma>>) list option
         tpEqSys : (int * Expr) list option
         tpEqSysVarMap : Map<int,Variable<State,Gamma>> option
-        tpBuildCtx : BuildContext<State,LocalMemory,Gamma,TerOp> option
         tpResValIter : NumericType option
         tpResValBisec : NumericType option
         tpAST : bool option
@@ -248,11 +257,11 @@ type RunningContext =
         ettEqSysSimplifiedScale : uint option
     }
     
-let defaultRunningContext kptsa =
-    { kptsa = kptsa
+let defaultRunningContext model =
+    { model = model
       tpEqSys = None
       tpEqSysVarMap = None
-      tpBuildCtx = None
+      reuseCtx = None
       ettEqSys = None
       ettEqSysVarMap = None
       tpAST = None
@@ -299,27 +308,43 @@ let getEttRawResVal ctx =
     | Some _ as v -> v
     | None -> ctx.rawCettResValIter
 
+let inline simplifyPPDA (ppda : ProbPDAut<_,_>) = ppda
+
 let simplifyKPTSA (kptsa : KPTSA) =
     debugPrint "Start Epsilon Elimination ...";
-    let kptsa = epsilonElimination (Option.isSome kptsa.stepCount) kptsa in
     let simplifyTimingLog = "SimplifyTimeLog" in
     logTimingMark simplifyTimingLog;
+    let kptsa = epsilonElimination (Option.isSome kptsa.stepCount) kptsa in
     debugPrint "End Epsilon Elimination";
     debugPrint "Epsilon Eliminated model: ";
     debugPrint $"{kptsa}"
     debugPrint $"Epsilon Elimination Time: {numericValuePrint $ tapTimingMark simplifyTimingLog}";
     kptsa
     
-let constructTPEquationSystem kptsa =
+let constructTPEquationSystem model =
     innerDebugPrint "Start constructing primitive formula system..."
-    let rptsa = generaliseKPTSA kptsa in 
-    let ctx, pes = terProbFormulaConstructWithCtx (isNormalisedRPTSA rptsa) rptsa in
-    innerDebugPrint "Primitive formula system construction finished.";
-    innerDebugPrint $"""Primitive Formula System Construction Time: {numericValuePrint $ getTimingFromMark "tpEqSys"}s""";
+//    let model = generaliseKPTSA kptsa in 
+    let ctx, pes, x0 =
+        match model with
+        | RMKPTSA kptsa ->
+            let rptsa = generaliseKPTSA kptsa in
+            let ctx, pes =
+                terProbFormulaConstructWithCtx (isNormalisedRPTSA rptsa) rptsa
+            in
+            RC_RPTSA ctx, pes, terProbX0 rptsa
+        | RMPPDA ppda ->
+            let ctx = directBuildPrimitivePpdaEqSys ppda in
+            let pes = convertToEqSys_TP ppda ctx in
+            let x0 = transVar ppda PVCProb EVX0 in
+            RC_PPDA ctx, pes, x0
+    in
+    innerDebugPrint "Primitive formula system construction finished."
+    let str = numericValuePrint $ getTimingFromMark "tpEqSys" in
+    innerDebugPrint $"""Primitive Formula System Construction Time: {str}s""";
     let es, transMap =
         formulaSystemToExprSystemWithHint
             (Seq.toList pes)
-            (Map.add (terProbX0 rptsa) 0 Map.empty)
+            (Map.add x0 0 Map.empty)
     in
     let transMap =
         Map.toSeq transMap
@@ -385,13 +410,12 @@ let runCheck_K gammaPrinter rptsa =
     end
 
 let runTerProbEqSysConstruction ctx =
-    let kptsa = ctx.kptsa in
+    let model = ctx.model in
     processPrint "Start constructing termination probability equation system...";
-    logTimingMark "tpEqSys"
-    let es, varMap, expCtx, pes = constructTPEquationSystem kptsa in
-//    check_K k pes;
-    processPrint "Equation system construction finished."
-    eqSysPrint Flags.DEBUG $"Initial Equation System:\n{printExprSystemWithVarMap es varMap}"
+    logTimingMark "tpEqSys";
+    let es, varMap, reuseCtx, pes = constructTPEquationSystem model in
+    processPrint "Equation system construction finished.";
+    eqSysPrint Flags.DEBUG $"Initial Equation System:\n{printExprSystemWithVarMap es varMap}";
     let tpEqSysScale = List.length es in
     
     resultPrint $ RTpEqPrimitiveScale (uint tpEqSysScale);
@@ -406,7 +430,7 @@ let runTerProbEqSysConstruction ctx =
         ctx with
             tpEqSys = Some es
             tpEqSysVarMap = Some varMap
-            tpBuildCtx = Some expCtx
+            reuseCtx = Some reuseCtx
             tpPrimitiveEqSys = Some pes
             tpEqSysConstructTime = Some tpEqSysConstructTime
             tpEqSysSimplificationTime = time
@@ -554,36 +578,51 @@ let tpQuantitative ctx =
     
 let runConstructExpTerTimeEqSys ctx =
     processPrint "Start constructing equation system for expected termination time...";
-    logTimingMark "ettEqSys";
-    let rptsa = generaliseKPTSA ctx.kptsa in
+    logTimingMark "ettEqSys"
+    let getRptsa =
+        lazy
+        match ctx.model with
+        | RMKPTSA kptsa -> generaliseKPTSA kptsa
+        | _ -> IMPOSSIBLE () in
     let ettPrimitiveEqSys =
         // bugfix: for the already existed tpEqSys
-        // the function only builds the initial equation system
+        // the function only builds the pure ETT part of the equation system
         // while for when nothing is built, the equation system will explore the whole system
-        if Flags.ETT_REUSE_TP_RESULT then
-            match ctx.tpBuildCtx with
-            | Some _ ->
+        if Flags.ETT_REUSE_TP_RESULT && Option.isSome ctx.reuseCtx then
+            let reuseCtx = Option.get ctx.reuseCtx in
+            match reuseCtx with
+            | RC_RPTSA rc ->
                 terExpFormulaConstruct
-                    ctx.tpBuildCtx  // which is Some
-                    (isNormalisedRPTSA rptsa)
-                    rptsa
+                    (Some rc)  // which is Some
+                    (isNormalisedRPTSA getRptsa.Value)
+                    getRptsa.Value
                 ++
                 Option.get ctx.tpPrimitiveEqSys
-            | None ->
-                terExpFormulaConstruct
-                    ctx.tpBuildCtx  // which is None
-                    (isNormalisedRPTSA rptsa)
-                    rptsa
+            | RC_PPDA pes ->
+                let ppda = match ctx.model with
+                           | RMPPDA ppda -> ppda
+                           | _ -> IMPOSSIBLE ()
+                in
+                convertToEqSys_ETT ppda pes ++ ctx.tpPrimitiveEqSys.Value
         else
-            terExpFormulaConstruct
-                None
-                Flags.KPTSA_NORMALISED
-                rptsa
+            match ctx.model with
+            | RMKPTSA _ ->
+                terExpFormulaConstruct
+                    None
+                    Flags.KPTSA_NORMALISED
+                    getRptsa.Value
+            | RMPPDA ppda ->
+                directPpdaEqSys_ETT ppda
+    in
+    let x0 =
+        match ctx.model with
+        | RMKPTSA _ -> terExpX0 getRptsa.Value
+        | RMPPDA ppda -> transVar ppda PVCExp EVX0
     in
     let ettEs, revMap =
         formulaSystemToExprSystemWithHint
             ettPrimitiveEqSys
-            (Map.add (terExpX0 rptsa) 0 Map.empty)
+            (Map.add x0 0 Map.empty)
         |> BiMap.fstMap (fun es ->
             if Flags.DEBUG then List.sortBy fst es
             else es)
@@ -740,10 +779,10 @@ let cettApproximation ctx =
             in
             Map(res).[0], Some iterRounds
     in
-    let str =
-        (if ctx.tpAST = Some true then "" else "Conditional ") + 
-            "Expected Termination Time"
-    in
+//    let str =
+//        (if ctx.tpAST = Some true then "" else "Conditional ") + 
+//            "Expected Termination Time"
+//    in
     if Flags.ETT_APPROX_BY_BISECTION then resultPrint $ REttApproxRawValBisec rawRes
     else resultPrint $ REttApproxRawValIter rawRes;
     let res =
@@ -817,10 +856,15 @@ let cettApproximation ctx =
 //            resultPrint $ REttIsPAST (Error "")
 //            processPrint "No result"
 
+let simplifyModel model =
+    match model with
+    | RMKPTSA kptsa -> RMKPTSA $ simplifyKPTSA kptsa
+    | RMPPDA ppda -> RMPPDA $ simplifyPPDA ppda
+
 let runNonModelCheck kptsa : unit =
     processPrint "Start problem resolving..."
     try
-        let ctx = defaultRunningContext (simplifyKPTSA kptsa) in
+        let ctx = defaultRunningContext $ simplifyModel kptsa in
         if Flags.TP_RUN_BOTH_ITER_AND_BISEC then Flags.TP_APPROX_BY_BISECTION <- true;
         let ctx =
             ctx
@@ -969,7 +1013,7 @@ let runNonModelCheck kptsa : unit =
 //        processPrint $"""Result: {res.ToString ()}"""
 //    | None -> failwith "No valuation data to conduct model checking."
 
-let runFromKPTSA ori_kptsa =
+let runFromAutomaton ori_kptsa =
     runNonModelCheck ori_kptsa
 
 /// if the model is a PAHORS, then translate it from this way
@@ -986,7 +1030,7 @@ let runFromPAHORS pahors =
     processPrint $"{kptsa}";
     processPrint "============================================================================";
     resultPrint $ RPahorsTranslationTime (tapTimingMark translationTimingMark);
-    runFromKPTSA kptsa
+    runFromAutomaton $ RMKPTSA kptsa
     
 let genMCFGFromRules rptsa rules =
     let nts =
@@ -1162,12 +1206,15 @@ let runFromString (s : string) =
     | MKPTSA kptsa ->
         runCheck_K printKPTSAGamma $ generaliseKPTSA kptsa;
         // switch off the optimisations
-        Flags.IS_TRANSLATED_KPTSA <- false
-        runFromKPTSA kptsa
+        Flags.IS_TRANSLATED_KPTSA <- false;
+        runFromAutomaton $ RMKPTSA kptsa
     | MPAHORS pahors ->
         // switch on the optimisations
-        Flags.IS_TRANSLATED_KPTSA <- true
+        Flags.IS_TRANSLATED_KPTSA <- true;
         runFromPAHORS pahors
+    | MPPDA ppda ->
+        Flags.IS_TRANSLATED_KPTSA <- false;
+        runFromAutomaton $ RMPPDA ppda
     | MSTRRPTSA rptsa ->
         runCheck_K toString $ toTerRptsa rptsa;
         runConvertToMCFG rptsa
@@ -1273,13 +1320,14 @@ type DataToCollect = {
 /// run an rPTSA example to collect the information wanted
 let runAnExample (example : string) =
     let kptsa = TextInput.parseString example in
-    let kptsa =
+    let model =
         match kptsa with
-        | MKPTSA kptsa -> kptsa
+        | MKPTSA kptsa -> RMKPTSA kptsa
+        | MPPDA ppda -> RMPPDA ppda
         | _ -> IMPOSSIBLE () in
     Flags.TP_APPROX_BY_BISECTION <- true;
     let runCtx =
-        defaultRunningContext $ simplifyKPTSA kptsa
+        defaultRunningContext $ simplifyModel model
         |> tpApproximation
     in
     let bisecApproxTime =
@@ -1506,11 +1554,12 @@ let runOnlyTerminationProbability (example : string) =
     let kptsa = TextInput.parseString example in
     let kptsa =
         match kptsa with
-        | MKPTSA kptsa -> kptsa
+        | MKPTSA kptsa -> RMKPTSA kptsa
+        | MPPDA ppda -> RMPPDA ppda
         | _ -> IMPOSSIBLE () in
     Flags.TP_APPROX_BY_BISECTION <- true;
     let runCtx =
-        defaultRunningContext $ simplifyKPTSA kptsa
+        defaultRunningContext $ simplifyModel kptsa
         |> tpApproximation
     in
     {
@@ -1560,14 +1609,15 @@ type CmpWithPReMoResult =
 /// The PReMo iteration will `not` work with simplification
 let cmpUsualWithPReMo example simplifyInMySolution =
     Flags.TP_APPROX_BY_BISECTION <- false;
-    let kptsa = TextInput.parseString example in
-    let kptsa =
-        match kptsa with
-        | MKPTSA kptsa -> kptsa
+    let model = TextInput.parseString example in
+    let model =
+        match model with
+        | MKPTSA kptsa -> RMKPTSA kptsa
+        | MPPDA ppda -> RMPPDA ppda
         | _ -> IMPOSSIBLE () in
     // preserve the original equation system
     Flags.SIMPLIFY <- false;
-    let runCtx = defaultRunningContext $ simplifyKPTSA kptsa in
+    let runCtx = defaultRunningContext $ simplifyModel model in
     let eqSys, runCtx = genOrGetTPEqSys runCtx in
     let myTimingMark = "MySolution" in
     let premoTimingMark = "PReMoSolution" in
@@ -1608,12 +1658,13 @@ let runGeneratedExamples run (exampleName : string) exampleGen paras =
     |> String.concat "\n\n"
 
 let runPrecisionTestWithPReMo example precisions =
-    let kptsa = TextInput.parseString example in
-    let kptsa =
-        match kptsa with
-        | MKPTSA kptsa -> kptsa
+    let model = TextInput.parseString example in
+    let model =
+        match model with
+        | MKPTSA kptsa -> RMKPTSA kptsa
+        | MPPDA ppda -> RMPPDA ppda
         | _ -> IMPOSSIBLE () in
-    let runCtx = defaultRunningContext $ simplifyKPTSA kptsa in
+    let runCtx = defaultRunningContext $ simplifyModel model in
     let eqSys, runCtx = genOrGetTPEqSys runCtx in
     let myTimingMark = "my" in
     let premoTimingMark = "PReMo" in
@@ -1637,25 +1688,27 @@ let private constructCtxFromRPTSAExampleString exampleStr =
     let kptsa = TextInput.parseString exampleStr in
     let kptsa, convTime =
         match kptsa with
-        | MKPTSA kptsa -> kptsa, None
+        | MKPTSA kptsa -> RMKPTSA kptsa, None
         | MPAHORS pahors ->
             let pahorsConvTimeMark = "PAHORS Conv" in
             logTimingMark pahorsConvTimeMark;
-            (PAHORS2KPTSA.translate pahors).rptsa,
+            RMKPTSA (PAHORS2KPTSA.translate pahors).rptsa,
                 Some $ tapTimingMark pahorsConvTimeMark
+        | MPPDA ppda -> RMPPDA ppda, None
         | _ -> IMPOSSIBLE () in
-    let ctx = defaultRunningContext $ simplifyKPTSA kptsa in
+    let ctx = defaultRunningContext $ simplifyModel kptsa in
     { ctx with
         translateFrom = Option.map (fun _ -> "PAHORS") convTime;
         translationTime = convTime }
 
 let runSequentialPrecisionTest example =
-    let kptsa = TextInput.parseString example in
-    let kptsa =
-        match kptsa with
-        | MKPTSA kptsa -> kptsa
+    let model = TextInput.parseString example in
+    let model =
+        match model with
+        | MKPTSA kptsa -> RMKPTSA kptsa
+        | MPPDA ppda -> RMPPDA ppda
         | _ -> IMPOSSIBLE () in
-    let runCtx = defaultRunningContext $ simplifyKPTSA kptsa in
+    let runCtx = defaultRunningContext $ simplifyModel model in
     let eqSys, _ = genOrGetTPEqSys runCtx in
     
     // calling PReMo
@@ -2131,8 +2184,8 @@ let runAutoCollectPAHORSLaTeXTable () =
             CITpIterRoundNumber
         ]
     in
-    let examples =
-        [
+//    let examples =
+//        [
 //            "Ex2.3", "example phors 2.3"
 //            "Listgen", "example phors listgen"
 //            "Treegen", "example 5"
@@ -2151,16 +2204,16 @@ let runAutoCollectPAHORSLaTeXTable () =
 //            "Discont($\\frac{1}{1024}$, $\\frac{1023}{1024}$)*", "example 8 (1024)"
 //            "Example 4.9", "example 7"
 //            "Printer", "example 3.1 (Heavy)"
-            "NTreegen (1)", "example ngen (1)"
-            "NTreegen (3)", "example ngen (3)"
-            "NTreegen (6)", "example ngen (6)"
-            "NTreegen (9)", "example ngen (9)"
-            "VTreegen (1)", "example vgen (1)"
-            "VTreegen (2)", "example vgen (2)"
-            "VTreegen (3)", "example vgen (3)"
-            "VTreegen (4)", "example vgen (4)"
-        ]
-    in
+//            "NTreegen (1)", "example ngen (1)"
+//            "NTreegen (3)", "example ngen (3)"
+//            "NTreegen (6)", "example ngen (6)"
+//            "NTreegen (9)", "example ngen (9)"
+//            "VTreegen (1)", "example vgen (1)"
+//            "VTreegen (2)", "example vgen (2)"
+//            "VTreegen (3)", "example vgen (3)"
+//            "VTreegen (4)", "example vgen (4)"
+//        ]
+//    in
     
     
     // execution

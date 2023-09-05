@@ -347,6 +347,9 @@ module Flags =
     let mutable IS_TRANSLATED_KPTSA = false
 //    let mutable DRA_MODEL_CHECKING = false
     let mutable PRELOAD_BINDINGS : Map<string, NumericType> = Map.empty
+    /// directly cope with pPDA and pBPA, so that it is NOT converted to rPTSA
+    /// but the equation system is generated directly
+    let mutable DIRECT_PPDA = false
     let GLOBAL_TIMING = Timing ()
     /// This is a VERY BAD practice, as it requires information unknown at this point but to define below
     /// and it actually pre-requires State, LocalMemories and Gamma and DRA input alphabet to be `int`

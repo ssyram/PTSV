@@ -178,6 +178,8 @@ module TextInput =
                     MPAHORS pahors
                 | PPDADef model ->
                     MKPTSA model
+                | DirectPPDADef model ->
+                    MPPDA model
                 | PBPADef model ->
                     MKPTSA model
                 | StrGenRPTSA model ->
