@@ -47,6 +47,7 @@ Or
 -max_iter_round NUMBER: specify maximum iteration rounds (by default infty)
 -t <number>: setting time out, in milliseconds
 [-D] NAME=NUMBER: to specify parse bindings (as additional `let` expressions)
+-conv: convert pPDA / pBPA to rPTSA before solving
 -s: silent mode
 -a: test all information
 -no_expr: do not print the expressions and equation systems

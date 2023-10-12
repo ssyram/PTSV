@@ -2492,10 +2492,9 @@ let iteratingExprSystem
             |> Array.map (uncurry (-) >> abs)
             |> Array.max
             |> fun x ->
-                if Flags.DEBUG then begin
-                    printf $"\rIteration Rounds: {times}, Max Diff: {x.getDouble ()}   ";
-                end;
-                if x <= minDiff then nextVals else iterate exprs nextVals
+                debugSameLinePrint $"\rIteration Rounds: {times}, Max Diff: {x.getDouble ()}   ";
+                if x <= minDiff then (debugPrint ""; nextVals)
+                else iterate exprs nextVals
         in
     let exprs, oriVList =
         reindexedExprSystem es

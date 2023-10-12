@@ -34,8 +34,42 @@ type ProbPDAut<'q, 'x>
         "  }\n" +
         "}"
 
+/// For example, if there is a rule `q X -> q' Y`
+/// Then, the possible down states from `Y` will also be the one for `X`
+let private saturate ppda basicMap =
+    let chooser x (_, _, lst) =
+        match lst with
+        | [] -> None
+        | _  -> Some (x, List.last lst) in
+    let colRel ((_, x), lst) = List.choose (chooser x) lst in
+    
+    /// the dependencies -- the LHS `X` depends on the last RHS `Y`
+    let stkSymDep =
+        Map.toList ppda.ppdaRules
+        |> List.collect colRel  // ('x * 'x) list
+        |> Set.ofList
+        |> Set.toList in
+    let findInMap x map =
+        match Map.tryFind x map with
+        | Some set -> set
+        | None -> Set.empty in
+    
+    /// perform saturation -- loop until fixed point
+    let rec saturate map =
+        let folder (changed, newMap) (x, x') =
+            let setX = findInMap x map in
+            let setX' = findInMap x' map in
+            let newSetX = Set.union setX setX' in
+            if newSetX = setX then (changed, newMap)  // no need to change
+            else (true, Map.add x newSetX newMap)  // to the new union set
+        in
+        let (changed, newMap) = List.fold folder (false, map) stkSymDep in
+        if changed then saturate newMap else newMap
+    in
+    saturate basicMap
 
 /// The `downMap` of a given X -- what is the possible down qs from a given direction
+/// BUGFIX: should iterate until fixed point rather than pure iteration
 let private ppdaDownMap ppda =
     let fMapper lst =
         flip List.filter lst (fun (_, _, lst) -> List.isEmpty lst)
@@ -46,6 +80,7 @@ let private ppdaDownMap ppda =
     |> aggregateList id
     |> List.map (BiMap.sndMap (List.concat >> Set.ofList))
     |> Map.ofList
+    |> saturate ppda
 
 type IToRawVar<'q, 'g>
     when 'q : comparison
@@ -226,7 +261,7 @@ let directBuildPrimitivePpdaEqSys ppda =
     debugPrint $ "pPDA to work: " + toString ppda;
     let obj = PpdaEqSysConsCtx ppda in
     let ret = obj.GetEqSys () in
-    debugPrint $
+    eqSysPrint Flags.DEBUG $
         "Constructed Primitive pPDA Equation System:\n" +
         printPpdaEqSys ret;
     ret
@@ -258,7 +293,8 @@ let directPpdaEqSys_TP ppda =
 /// p * \prod_i P[Xi] + p * \sum_i E(Xi) * \prod_(j /= i) P[Xj]
 /// The first `p` is because the step is fixed to be `1` -- just 1 time of reduction to be counted
 /// The second `p` is the same as `hp` in the rPTSA case.
-let private distAndSumItem ppda (PpdaRHS (p, lst)) =
+/// BUGFIX: if the LHS is `x0` then no need to add the first component as it should not be counted on its own
+let private distAndSumItem ppda isX0 (PpdaRHS (p, lst)) =
     let p = FConst p in
     let toAllPVar lst =
         List.map (FVar << transVar ppda PVCProb) lst
@@ -274,19 +310,21 @@ let private distAndSumItem ppda (PpdaRHS (p, lst)) =
             let thisRes = List.fold (*) p $ eVar :: pVars in
             thisRes + appAndDo (curX :: pre) post
         | [] ->
-            List.fold (*) p $ toAllPVar pre  // p * \prod_i P[Xi]
+            if isX0 then FConst NUMERIC_ZERO
+            else List.fold (*) p $ toAllPVar pre  // p * \prod_i P[Xi]
     in
     appAndDo [] lst
     
     
 let convertToEqSys_ETT ppda lst =
     let transVar wrap v = transVar ppda wrap v in
-    let mapper lst =
-        List.map (distAndSumItem ppda) lst
+    let transRHS var lst =
+        List.map (distAndSumItem ppda (var = EVX0)) lst
         |> List.fold (+) (FConst NUMERIC_ZERO)
         |> optimiseFormula
     in
-    List.map (BiMap.pairMap (transVar PVCExp, mapper)) lst
+    let mapper (var, lst) = (transVar PVCExp var, transRHS var lst) in
+    List.map mapper lst
     
     
 let directPpdaEqSys_ETT ppda =

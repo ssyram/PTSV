@@ -231,6 +231,8 @@ type FinalResult =
     | RHeader of string
     | RRealK of uint  // the true `k` from `check_K`
     | RReadFormat of string
+    | RCopeMode of string
+    | RParseTime of TimeSpan
     | RTotalTime of TimeSpan
     | RPahorsTranslationTime of TimeSpan
     | RPpdaTranslationTime of TimeSpan
@@ -263,7 +265,7 @@ type FinalResult =
     | REttApproxTimeBisec of TimeSpan
     | REttApproxTimeIter of TimeSpan
     | REttExploredVar of uint
-    static member private FullNameConvert (str : string) =
+    static member FullNameConvert (str : string) =
         let getFullName (abbrName : string) =
             match abbrName.ToLower () with
             | "r" -> ""  // ignore the `R` prefix
@@ -290,7 +292,7 @@ type FinalResult =
         |> Array.map getFullName
         |> Array.filter (String.IsNullOrEmpty >> not)
         |> String.concat " "
-    static member private FieldPrint (obj : obj) : string =
+    static member FieldPrint (obj : obj) : string =
         match obj with
         | :? Result<bool, string> as res ->
             match res with
@@ -298,6 +300,11 @@ type FinalResult =
             | Error msg -> msg.ToString().ToUpper()
         | :? string as str -> str
         | _ -> numericValuePrint obj
+    /// get the unique printing name of the field as well as the unique field as `obj`
+    member x.GetAbsInfo =
+        FSharpValue.GetUnionFields(x, typeof<FinalResult>)
+        |> fun (info, objs) ->
+            (FinalResult.FullNameConvert info.Name, Array.exactlyOne objs)
     member x.ToString(nameConvFunc, (fieldPrintFunc : obj -> string)) =
         FSharpValue.GetUnionFields(x, typeof<FinalResult>)
         |> fun (info, objs) ->
@@ -349,7 +356,7 @@ module Flags =
     let mutable PRELOAD_BINDINGS : Map<string, NumericType> = Map.empty
     /// directly cope with pPDA and pBPA, so that it is NOT converted to rPTSA
     /// but the equation system is generated directly
-    let mutable DIRECT_PPDA = false
+    let mutable DIRECT_PPDA = true
     let GLOBAL_TIMING = Timing ()
     /// This is a VERY BAD practice, as it requires information unknown at this point but to define below
     /// and it actually pre-requires State, LocalMemories and Gamma and DRA input alphabet to be `int`

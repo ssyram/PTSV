@@ -490,6 +490,10 @@ let stdRuleToPPDARule q X prob op =
 type StdPPDAState<'st, 'g> =
     | SPSOriginal of 'st
     | SPSRules of 'st * 'g list
+/// the virtual bottom
+let VIR_BOT = "$VB$"
+/// the virtual start
+let VIR_ST = "$VST$"
 /// requires macroDefs to translate the probability value
 /// requires gammaList to generate the first stuff
 /// the final bool in the return list stands for whether this rule should be counted
@@ -510,11 +514,34 @@ let pPDARewritingRuleToStdRules macroDefs gammaList (PPDARule (q, X, prob, p, Xs
         [(SPSOriginal q, X, prob.eval macroDefs, PPDATransState $ SPSOriginal p, true)]
     | [Y; Z] when X = Y ->
         [(SPSOriginal q, X, prob.eval macroDefs, PPDATransPush (SPSOriginal p, Z), true)]
+    | Y :: Z :: Xs when X = Y ->
+        (SPSOriginal q, X, prob.eval macroDefs, PPDATransPush (SPSRules (p, Xs), Z), true) ::
+        translateUpRules Xs Z
     | [] -> [(SPSOriginal q, X, prob.eval macroDefs, PPDATransPop $ SPSOriginal p, true)]
     | _ ->
         [(SPSOriginal q, X, prob.eval macroDefs, PPDATransPop $ SPSRules (p, Xs), true)] ++
         List.reduce (++) (List.map (translateUpRules Xs) gammaList)  
+let private mentionedStates (PPDARule (q, _, _, rq, _)) = [ q; rq ]
+let bottomProxyRules oriQ0 oriG0 (rules : PPDARule<_,_> list) =
+    // VST VB -> qInit S VB  -- VST to avoid conflicting with states below
+    // forall q. q VB -> q
+    let allStates =
+        List.collect mentionedStates rules
+        |> Set.ofList
+        |> Set.toList
+    in
+    let mapper q = PPDARule (q, VIR_BOT, PEConst NUMERIC_ONE, q, []) in
+    PPDARule (VIR_ST, VIR_BOT, PEConst NUMERIC_ONE, oriQ0, [ oriG0; VIR_BOT ]) ::
+    List.map mapper allStates
+let notCountVB vbG (q, X, p, op, toCount) =
+    if X = vbG then (q, X, p, op, false) else (q, X, p, op, toCount)
 let pPDAToKPTSA (maybeDraOriginalMap, draAlphabetIdxMap) macroDefs (PPDAConfig (q0, gamma0)) rules : KPTSA =
+    // prepare the virtual bottom for correct standard rules conversion
+    let oriQ0 = q0 in
+    let oriG0 = gamma0 in
+    let gamma0 = VIR_BOT in
+    let q0 = VIR_ST in
+    let rules = bottomProxyRules oriQ0 oriG0 rules ++ rules in
     // convert to standard rules
     // combine the duplicating rules at first, as when converted to standard rules, duplicating rules should be
     // EXCLUDED rather than combined
@@ -543,7 +570,9 @@ let pPDAToKPTSA (maybeDraOriginalMap, draAlphabetIdxMap) macroDefs (PPDAConfig (
     let countRules : HashSet<State * LocalMemory * Gamma * TransOp> = HashSet () in
     let coreRules =
         List.map (pPDARewritingRuleToStdRules Map.empty pPDAGammaList) rules
-        |> List.concat in
+        |> List.concat
+        |> List.map (notCountVB $ gIdxMap.lookUp VIR_BOT)
+    in
     let coreRules =
         flip List.map coreRules (fun (q, X, prob, op, count) ->
             let mapOp op : PPDATransOp<State, Gamma> =
@@ -590,7 +619,10 @@ let pPDAToKPTSA (maybeDraOriginalMap, draAlphabetIdxMap) macroDefs (PPDAConfig (
         match Map.find q reverseRPTSAStateMap with
         | SPSOriginal ppdaQ -> $"{Map.find ppdaQ reversePPDAStateMap}"
         | SPSRules (ppdaQ, Xs) ->
-            $"<{Map.find ppdaQ reversePPDAStateMap}, {List.map (flip Map.find reverseGammaMap) Xs}>"
+            let lStr =
+                List.map (flip Map.find reverseGammaMap) Xs
+                |> printFullSeq in
+            $"<{Map.find ppdaQ reversePPDAStateMap}, {lStr}>"
     let printGamma = flip Map.find reverseGammaMap in
     let printLocMem m =
         match m with
@@ -974,6 +1006,7 @@ let produceModel defs (probModel : ParseModel) =
             }
         | ModelPPDA (ppdaConfig, ppdaRules) ->
             resultPrint $ RReadFormat "pPDA";
+            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "pPDA" else "rPTSA");
             Flags.CHECK_K <- false;
             // qX |-> s
             let maybeMap = flip Option.map draMapping $

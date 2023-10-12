@@ -19,6 +19,7 @@ open Microsoft.FSharp.Core
 open Microsoft.FSharp.Reflection
 open PTSV
 open PTSV.Core
+open PTSV.Global
 open PTSV.Input
 open PTSV.NewEquationBuild
 open PTSV.Problems
@@ -414,6 +415,7 @@ let runTerProbEqSysConstruction ctx =
     processPrint "Start constructing termination probability equation system...";
     logTimingMark "tpEqSys";
     let es, varMap, reuseCtx, pes = constructTPEquationSystem model in
+    debugPrint "";
     processPrint "Equation system construction finished.";
     eqSysPrint Flags.DEBUG $"Initial Equation System:\n{printExprSystemWithVarMap es varMap}";
     let tpEqSysScale = List.length es in
@@ -1201,7 +1203,7 @@ let runFromString (s : string) =
     let parseTimeMark = "parseModel" in
     logTimingMark parseTimeMark;
     let model = TextInput.parseString s
-    processPrint $"Parsing Time: {numericValuePrint $ tapTimingMark parseTimeMark}"
+    resultPrint $ RParseTime (tapTimingMark parseTimeMark)
     match model with
     | MKPTSA kptsa ->
         runCheck_K printKPTSAGamma $ generaliseKPTSA kptsa;
@@ -1225,18 +1227,24 @@ let runFromFile (filePath : string) =
         sr.ReadToEnd ()
     runFromString s
     
+let private printResults () =
+    let results = List.rev Flags.RESULT_ACC in
+    processPrint "-------------------------------- Results --------------------------------";
+    List.map toString results
+    |> String.concat "\n"
+    |> println
+    
+let private runAndPrintResults filePath =
+    runFromFile filePath;
+    printResults ()
+    
 let runAFile (filePath : string) =
     printf "================================ ";
     printf $"Running file: \"{filePath}\"";
     printfn " ================================";
     Flags.GLOBAL_TIMING.reset ();
     Flags.RESULT_ACC <- [];
-    let run () = runFromFile filePath;
-                 let results = List.rev Flags.RESULT_ACC in
-                 processPrint "-------------------------------- Results --------------------------------";
-                 List.map toString results
-                 |> String.concat "\n"
-                 |> println;
+    let run () = runAndPrintResults filePath;
                  printf "================================ ";
                  printf $"End file: \"{filePath}\"";
                  printfn " ================================\n"
@@ -2355,4 +2363,128 @@ let runAutoCollectTpOnlyLaTeXTableForGRTAndLRT () =
         |> String.concat "\n\n"
         |> println),
      104857600)).Start ()
+    
+/// extract the result item
+let private extractResItem (res : FinalResult list) (item : FinalResult) =
+    let getName item =
+        match FSharpValue.GetUnionFields(item, item.GetType()) with
+        | (info, _) -> info.Name
+    in
+    let itemName = getName item in
+    let finder case =
+        let thisName = getName case in
+        thisName = itemName
+    in
+    List.find finder res
+    
+// -------------------------------- Compare Direct & Indirect pPDA Results --------------------------------
+    
+let private collectPpdaCmpRes filePath =
+    // PRE-RUN to reduce system issues
+    Flags.DIRECT_PPDA <- false;
+    runAFile filePath;
+    Flags.DIRECT_PPDA <- true;
+    runAFile filePath;
+    let directResult = List.rev Flags.RESULT_ACC in
+    Flags.DIRECT_PPDA <- false;
+    runAFile filePath;
+    let convertResult = List.rev Flags.RESULT_ACC in
+    (directResult, convertResult)
+    
+/// just print the two comparison results
+let private printSepCmpRes dirRes convRes =
+    // prepare to recover the result
+    let res = Flags.RESULT_ACC in
+    Flags.RESULT_ACC <- dirRes;
+    printResults ();
+    Flags.RESULT_ACC <- convRes;
+    printResults ();
+    Flags.RESULT_ACC <- res
+    
+let private toResMap res =
+    let mapper (record : FinalResult) = record.GetAbsInfo in
+    Map.ofList $ List.map mapper res
+    
+let percentageChange oriVal newVal =
+    if oriVal = 0.0 then
+        if newVal = 0.0 then 0.0
+        else 100.0  // if original value is 0 and new value is non-zero, treat it as a 100% increase
+    else
+        ((newVal - oriVal) / oriVal) * 100.0
+
+let resValCmp (dir : obj) (conv : obj) =
+    match dir with
+    | :? string as strOri -> $"{strOri} -> {conv}."
+    | :? uint as uintOri -> 
+        let change = percentageChange (float uintOri) (float (conv :?> uint)) in
+        let direction = if change > 0.0 then "INC" elif change < 0.0 then "DEC" else "UNCHANGED" in
+        $"{uintOri} -> {conv} ({direction} {Math.Abs(change)}%%)"
+    | :? TimeSpan as tsOri ->
+        let tsConv = conv :?> TimeSpan in
+        let change = percentageChange tsOri.TotalSeconds tsConv.TotalSeconds in
+        let direction = if change > 0.0 then "INC" elif change < 0.0 then "DEC" else "UNCHANGED" in
+        $"{tsOri} -> {tsConv} ({direction} {Math.Abs(change)}%%)"
+    | :? NumericType as numOri ->
+        let numConv = conv :?> NumericType in
+        let change = percentageChange (numOri.getDouble ()) (numConv.getDouble ()) in
+        let direction = if change > 0.0 then "INC" elif change < 0.0 then "DEC" else "UNCHANGED" in
+        $"{numericValuePrint numOri} -> {numericValuePrint numConv} ({direction} {Math.Abs change}%%)"
+    | :? uint64 as uint64Ori -> 
+        let change = percentageChange (float uint64Ori) (float (conv :?> uint64)) in
+        let direction = if change > 0.0 then "INC" elif change < 0.0 then "DEC" else "UNCHANGED" in
+        $"{uint64Ori} -> {conv} ({direction} {Math.Abs(change)}%%)"
+    | :? Result<bool, string> as resOri ->
+        let resConv = conv :?> Result<bool, string> in
+        let resOri =
+            match resOri with
+            | Ok r -> toString r
+            | Error e -> $"\"{e}\""
+        in
+        let resConv =
+            match resConv with
+            | Ok r -> toString r
+            | Error e -> $"\"{e}\""
+        in
+        $"{resOri} -> {resConv}"
+    | _ -> undefined ()
+    
+let printItemCmp dirMap convMap key =
+    match (Map.tryFind key dirMap,
+           Map.tryFind key convMap) with
+    | (Some dirV, Some convV) ->
+        println $ $"{key}: " + resValCmp dirV convV
+    | (Some dirV, None) ->
+        println $ $"{key}: " + FinalResult.FieldPrint dirV + " -> NONE."
+    | (None, Some convV) ->
+        println $ $"{key}: None -> " + FinalResult.FieldPrint convV
+    | (None, None) ->
+        println $ $"{key}: NO VALUE FOR BOTH."
+    
+let compareMaps dirMap convMap =
+    let dirKeys = Set(Map.keys dirMap) in
+    let convKeys = Set(Map.keys convMap) in
+    let allKeys = Set.union dirKeys convKeys in
+    List.iter (printItemCmp dirMap convMap) $ Set.toList allKeys
+    
+let private printCmpRes dirRes convRes =
+    processPrint "";
+    processPrint "-------------------------------- Comparison --------------------------------";
+    let dirMap = toResMap dirRes in
+    let convMap = toResMap convRes in
+    compareMaps dirMap convMap
+    
+let runPpdaCmp filePath =
+    // collect results
+    let dirRes, convRes = collectPpdaCmpRes filePath in
+    
+    // print the results
+    printSepCmpRes dirRes convRes;
+    
+    // print the comparisons
+    printCmpRes dirRes convRes
+    
+let testRunPpdaCmp () =
+    Flags.TP_RUN_BOTH_ITER_AND_BISEC <- true;
+    Flags.DEBUG <- true;
+    runPpdaCmp "../../../../more examples/pPDA/new example 1 (sequential 10).txt"
     

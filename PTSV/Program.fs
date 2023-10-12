@@ -35,6 +35,7 @@ let printMenu () =
     printfn "-max_iter_round NUMBER: specify maximum iteration rounds (by default infty)"
     printfn "-t <number>: setting time out, in milliseconds"
     printfn "[-D] NAME=NUMBER: to specify parse bindings (as additional `let` expressions)"
+    printfn "-conv: convert pPDA / pBPA to rPTSA before solving"
     printfn "-s: silent mode"
     printfn "-a: test all information"
     printfn "-no_expr: do not print the expressions and equation systems"
@@ -237,6 +238,9 @@ let rec argumentAnalysis argv =
         argumentAnalysis l
     | "-ppda" :: l ->
         Flags.DIRECT_PPDA <- true
+        argumentAnalysis l
+    | "-conv" :: l ->
+        Flags.DIRECT_PPDA <- false
         argumentAnalysis l
     | "-ett" :: l ->
         inTpMode <- false
