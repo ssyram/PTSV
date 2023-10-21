@@ -1,0 +1,22 @@
+%BEGIN pPDA config
+q0 = q
+gamma0 = bot
+%END pPDA config
+
+%BEGIN pPDA rules
+q bot -> q A bot.
+// r0 bot -> r0.
+r1 bot -> r1.
+
+q A (1/4)-> r1.
+q A (1/4)-> r0.
+q A (1/2)-> q O A.
+r0 A -> r0.
+r1 A -> q O.
+
+q O (1/4)-> r1.
+q O (1/4)-> r0.
+q O (1/2)-> q A O.
+r1 O -> r1.
+r0 O -> q A.
+%END pPDA rules

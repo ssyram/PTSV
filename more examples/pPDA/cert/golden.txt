@@ -1,0 +1,12 @@
+// golden
+
+let p = 0.3
+
+%BEGIN pBPA config
+gamma0 := S
+%END pBPA config
+
+%BEGIN pBPA rules
+S (p)-> S S S.
+S (1 - p)-> .
+%END pBPA rules

@@ -1,0 +1,20 @@
+let pA := 0.7
+let pB := 0.2
+let pC := 1 - pA - pB
+
+%BEGIN rPTSA config
+restriction := 2
+q0 := q0
+m0 := m0
+gamma0 := g0
+%END rPTSA config
+
+%BEGIN rPTSA rules
+(q0, m1, g1, pC, (q0, m0, UP g1))
+(q0, m0, g0, pA, (q0, m0, Up g1))
+(q0, m0, g1, pA, (q0, m0, Up g1))
+(q0, m0, g1, pB, (q1, m2, Down))
+(q1, m0, g1, pB, (q1, m1, Down))
+(q1, m0, g0, pC, (q0, m0, Up g1))
+(q0, m2, g1, 1, Top)
+%END rPTSA rules

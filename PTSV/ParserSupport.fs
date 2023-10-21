@@ -1014,7 +1014,18 @@ let produceModel defs (probModel : ParseModel) =
             if Flags.DIRECT_PPDA then
                 DirectPPDADef $ toDirectPPDA macroDefs ppdaConfig ppdaRules
             else
-                PPDADef $ pPDAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs ppdaConfig ppdaRules
+                let pPDAConvMark = "pPDAConv" in
+                logTimingMark pPDAConvMark;
+                let ret =
+                    PPDADef $
+                        pPDAToKPTSA
+                            (maybeMap, draAlphabetIdxMap)
+                            macroDefs
+                            ppdaConfig
+                            ppdaRules
+                in
+                resultPrint $ RPpdaTranslationTime (tapTimingMark pPDAConvMark);
+                ret
         | ModelPBPA (gamma0, pbpaRules) ->
             resultPrint $ RReadFormat "pBPA";
             Flags.CHECK_K <- false;
@@ -1025,7 +1036,18 @@ let produceModel defs (probModel : ParseModel) =
             if Flags.DIRECT_PPDA then
                 DirectPPDADef $ pBPAToDirectPPDA macroDefs gamma0 pbpaRules
             else
-                PBPADef $ pBPAToKPTSA (maybeMap, draAlphabetIdxMap) macroDefs gamma0 pbpaRules
+                let pBPAConvMark = "pBPAConv" in
+                logTimingMark pBPAConvMark;
+                let ret =
+                    PBPADef $
+                        pBPAToKPTSA
+                            (maybeMap, draAlphabetIdxMap)
+                            macroDefs
+                            gamma0
+                            pbpaRules
+                in
+                resultPrint $ RPpdaTranslationTime (tapTimingMark pBPAConvMark);
+                ret
     in
     ParseResult (macroDefs, model)
     

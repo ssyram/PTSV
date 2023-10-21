@@ -255,7 +255,13 @@ let turnZ3SolverResultIntoBool (solver : Solver) (query : BoolExpr []) =
     match Flags.CORE_TIME_OUT with
     | Some t -> let elapsed = Flags.GLOBAL_TIMING.getTotalRawTime () in
                 if t <= elapsed then failwith "Time out.";
-                solver.Set("timeout", uint (t - elapsed).TotalMilliseconds)
+                let timeout = t - elapsed in
+                let timeoutMilliSec = uint timeout.TotalMilliseconds in
+                innerDebugPrint $"Setting Z3 timeout to be: {timeout} ({timeoutMilliSec})";
+                solver.Set("timeout", timeoutMilliSec)
+                solver.Assert(solver.Context.ParseSMTLIB2String $"(set-option :timeout {timeoutMilliSec})")
+                printfn $"{solver.Help}"
+                printfn $"{solver.ParameterDescriptions}"
     | None   -> ()
     innerDebugPrint $
             $"""Obtained Assertions to Solve: {Array.map toString solver.Assertions |> String.concat "\n"}""" +
@@ -264,7 +270,9 @@ let turnZ3SolverResultIntoBool (solver : Solver) (query : BoolExpr []) =
     | Status.SATISFIABLE -> true
     | Status.UNSATISFIABLE -> false
     | Status.UNKNOWN ->
-        failwith $"NLSat could not determine the satisfiability of the query, reason: {solver.ReasonUnknown}"
+        let reason = solver.ReasonUnknown in
+        if reason.StartsWith "timeout" then raise $ TimeoutException $"Z3 Timeout: {reason}."
+        else failwith $"NLSat could not determine the satisfiability of the query, reason: {reason}"
     | _ ->
         failwith "Invalid Status"
         
@@ -1023,4 +1031,17 @@ let rec positiveOuterBisection accuracy isLe lower upper =
     
 let collectToMap lst =
     Map.ofList $ aggregateList id lst
+    
+    
+let getFilesWithContent dir ext =
+    if Directory.Exists(dir) then
+        Directory.EnumerateFiles(dir, "*." + ext, SearchOption.AllDirectories)
+        |> Seq.map (fun fullPath -> 
+            let name = Path.GetRelativePath(dir, fullPath)
+            let content = File.ReadAllText(fullPath)
+            (name, content))
+        |> Seq.toList
+    else
+        []
+    
     

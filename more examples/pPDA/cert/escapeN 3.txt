@@ -1,0 +1,14 @@
+// escapeN 3
+
+%BEGIN pBPA config
+gamma0 := F0
+%END pBPA config
+
+%BEGIN pBPA rules
+F0 (1 / 2)-> F1 F1.
+F0 (1 / 2)-> .
+F1 (2 / 3)-> F2 F2.
+F1 (1 / 3)-> .
+F2 (3 / 4)-> F0 F0.
+F2 (1 / 4)-> .
+%END pBPA rules

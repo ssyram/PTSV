@@ -1,0 +1,13 @@
+// geom-offspring
+
+%BEGIN pBPA config
+gamma0 := S
+%END pBPA config
+
+%BEGIN pBPA rules
+S -> Sow.
+Sow (2 / 5)-> S Siw Sow.
+Sow (3 / 5)-> .
+Siw (3 / 5)-> S Siw.
+Siw (2 / 5)-> .
+%END pBPA rules

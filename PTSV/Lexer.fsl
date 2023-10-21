@@ -100,6 +100,8 @@ rule token = parse
 | "="                                   { ASSIGN }
 | ":="                                  { ASSIGN }
 | "\\top"                               { TER }
+| "\\Top"                               { TER }
+| "Top"                                 { TER }
 | "\\omega"                             { OMEGA }
 | "\\Omega"                             { OMEGA }
 | alphabet(alphabet|digit)*             { ID (System.String lexbuf.Lexeme) }

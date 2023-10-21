@@ -1,0 +1,15 @@
+// modN 3
+
+%BEGIN pBPA config
+gamma0 := F2
+%END pBPA config
+
+%BEGIN pBPA rules
+F2 -> FP2 FP2.
+FP2 (2 / 3)-> F1.
+FP2 (1 / 3)-> F0.
+F0 -> .
+F1 -> FP1.
+FP1 (2 / 3)-> F0.
+FP1 (1 / 3)-> F2.
+%END pBPA rules

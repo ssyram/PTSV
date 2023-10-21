@@ -620,6 +620,13 @@ let main argv =
     
 //    Run.runAutoCollectPaperExamplesLaTeXTable ()
     
+//    Flags.DIRECT_PPDA <- false;
+//    let mapper name =
+//        name, readFileString ("../../../../more examples/pPDA/cert/" + name + ".txt")
+//    in
+//    Array.map mapper argv
+//    |> Run.runGenATpAndEttLaTeXTable
+    
     // real execution of program
 //    try
     argumentAnalysis (List.ofArray argv)

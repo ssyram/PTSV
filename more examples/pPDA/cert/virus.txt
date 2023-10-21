@@ -1,0 +1,24 @@
+// virus
+
+%BEGIN pBPA config
+gamma0 := Young
+%END pBPA config
+
+%BEGIN pBPA rules
+Young -> Y4 E3.
+Y4 (1 / 4)-> .
+Y4 (1 / 4)-> Young.
+Y4 (1 / 4)-> Young Young.
+Y4 (1 / 4)-> Young Young Young.
+E3 (1 / 3)-> .
+E3 (1 / 3)-> Elder.
+E3 (1 / 3)-> Elder Elder.
+Elder -> Y2 E5.
+Y2 (1 / 2)-> .
+Y2 (1 / 2)-> Young.
+E5 (1 / 5)-> .
+E5 (1 / 5)-> Elder.
+E5 (1 / 5)-> Elder Elder.
+E5 (1 / 5)-> Elder Elder Elder.
+E5 (1 / 5)-> Elder Elder Elder Elder.
+%END pBPA rules

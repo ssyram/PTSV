@@ -762,7 +762,7 @@ let cettApproximation ctx =
         | Some _ -> ctx
         | None -> tpApproximation ctx
     in
-    let tpVal = Option.get tpResVal in
+    let tpVal = Option.get $ getTpResVal ctx in
     if tpVal = NUMERIC_ZERO then
         raise $ ValueMark "Cannot compute ETT approximation: approximation to termination probability is 0.";
     let ettEqSys, ctx = genOrGetETTEqSys ctx in
@@ -1197,9 +1197,14 @@ let toTerRptsa rptsa =
       kMap = rptsa.kMap
       stateDependencies = rptsa.stateDependencies
       stepCount = None }
+    
+let private runInitialisation () =
+    Flags.GLOBAL_TIMING.reset ();
+    Flags.RESULT_ACC <- []
 
 /// may generate its own probFunc by this string
 let runFromString (s : string) =
+    runInitialisation ();
     let parseTimeMark = "parseModel" in
     logTimingMark parseTimeMark;
     let model = TextInput.parseString s
@@ -1238,25 +1243,35 @@ let private runAndPrintResults filePath =
     runFromFile filePath;
     printResults ()
     
-let runAFile (filePath : string) =
+let private printFileTitle filePath =
     printf "================================ ";
     printf $"Running file: \"{filePath}\"";
-    printfn " ================================";
-    Flags.GLOBAL_TIMING.reset ();
-    Flags.RESULT_ACC <- [];
-    let run () = runAndPrintResults filePath;
-                 printf "================================ ";
-                 printf $"End file: \"{filePath}\"";
-                 printfn " ================================\n"
+    printfn " ================================"
+    
+let private printFileEnd filePath =
+    printf "================================ ";
+    printf $"End file: \"{filePath}\"";
+    printfn " ================================\n"
+    
+let private runAndPrintTitle runner filePath =
+    printFileTitle filePath;
+    let res = runner filePath in
+    printFileEnd filePath;
+    res
+    
+let runAFile (filePath : string) =
+    let run () = runAndPrintResults filePath in
+    let runner _ =
+        if Flags.INNER_DEBUG then run ()
+        else try run ()
+             with
+             | :? TimeoutException -> eprintfn "Timeout."
+             | e ->
+                 eprintfn $"{e.Message}"
+                 if Flags.INNER_DEBUG then
+                     eprintfn $"{e.StackTrace}"
     in
-    if Flags.INNER_DEBUG then run ()
-    else try run ()
-         with
-         | :? TimeoutException -> eprintfn "Timeout."
-         | e ->
-             eprintfn $"{e.Message}"
-             if Flags.INNER_DEBUG then
-                 eprintfn $"{e.StackTrace}"
+    runAndPrintTitle runner filePath
     
 let runFiles (filePaths : string list) =
     List.iter runAFile filePaths
@@ -1692,6 +1707,12 @@ let runPrecisionTestWithPReMo example precisions =
     
 let private NumTwo = NumericType 2
 
+let private tryFindPPDATime () =
+    let picker = function
+                 | RPpdaTranslationTime time -> Some time
+                 | _ -> None in
+    List.tryPick picker Flags.RESULT_ACC
+
 let private constructCtxFromRPTSAExampleString exampleStr =
     let kptsa = TextInput.parseString exampleStr in
     let kptsa, convTime =
@@ -1705,9 +1726,18 @@ let private constructCtxFromRPTSAExampleString exampleStr =
         | MPPDA ppda -> RMPPDA ppda, None
         | _ -> IMPOSSIBLE () in
     let ctx = defaultRunningContext $ simplifyModel kptsa in
-    { ctx with
-        translateFrom = Option.map (fun _ -> "PAHORS") convTime;
-        translationTime = convTime }
+    match convTime with
+    | Some _ ->
+        { ctx with
+            translateFrom = Some "PAHORS"
+            translationTime = convTime }
+    | None ->
+        match tryFindPPDATime () with
+        | Some time ->
+            { ctx with
+                translateFrom = Some "Automaton"
+                translationTime = Some time }
+        | None -> ctx
 
 let runSequentialPrecisionTest example =
     let model = TextInput.parseString example in
@@ -1769,6 +1799,7 @@ let runSequentialPrecisionTest example =
 
 type CollectionItem =
     | CIPAHORSConvTime
+    | CIpPDAConvTime
     | CITpEqConsTime
     | CITpEqSimpTime
     | CITpEqPrimitiveScale
@@ -1845,6 +1876,7 @@ type CollectionItem =
         | CIEttEqSimpScale ->        "${\\numeq}_2$"
         | CITpIterRoundNumber ->     "$\\niter$"
         | CIEttIterRoundNumber ->    "$\\niter$"
+        | CIpPDAConvTime ->          "$t_{\\mathit{conv}}$"
         | _ -> failwith $"Unknown Column Name \"{item}\" for generating the LaTeX table."
 
 /// collect required items for the list of examples
@@ -1892,7 +1924,7 @@ let runAutoTableCollection
             flip Seq.map itemsToCollect (fun _ -> "$\\mathit{timeout}$")
             |> Seq.append [ name ]
         else
-        Flags.GLOBAL_TIMING.reset ();
+        runInitialisation ();
         let iterTpCtx = blank () in
         let tpPReMoCtx = blank () in
         let ettPReMoCtx = blank () in
@@ -1925,6 +1957,8 @@ let runAutoTableCollection
                 let tpResVal = getTpResVal x in
                 // there must be a value
                 let hasVal = x.cettQualRes = Some true && tpResVal <> Some NUMERIC_ZERO in
+                // if externally confirmed, then, even there is no need to check, just compute
+                let hasVal = hasVal || Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM in
                 if not hasVal then Some x
                 else
                     x
@@ -1954,6 +1988,13 @@ let runAutoTableCollection
             let tpResVal = getTpResVal ctx in
             let hasEttVal = ctx.cettQualRes = Some true && tpResVal <> Some NUMERIC_ZERO in
             flip Seq.map itemsToCollect (function
+                | CIpPDAConvTime ->
+                    match ctx.translateFrom with
+                    | Some str when Option.isSome ctx.translationTime ->
+                        if str.ToLower () = "automaton" then
+                            (Option.get ctx.translationTime).TotalSeconds.ToString("f4")
+                        else "-"
+                    | _ -> "-"
                 | CIEttIterRoundNumber ->
                     if hasEttVal then
                         Option.defaultValue 0uL iterEttCtx.Value.ettIterationRounds
@@ -2064,25 +2105,39 @@ let runAutoTableCollection
     |> Seq.append [ Seq.append [ "ExampleName" ] $ Seq.map toString itemsToCollect ]
     |> tableGenerator
 
-
-let runAutoLaTeXTableCollection items examples =
-    runAutoTableCollection (fun s ->
-        let newHeader =
-            Seq.head s
-            |> Array.ofSeq
-            |> Array.map (fun x ->
-                match x with
-                | "ExampleName" -> x
-                | x -> CollectionItem.Parse x |> CollectionItem.ToLaTeXName)
-        in
-        Seq.map Array.ofSeq s
+let private latexTabGen s =
+    let newHeader =
+        Seq.head s
         |> Array.ofSeq
-        |> fun x ->
-            x[0] <- newHeader;
-            printStrTableInLaTeX x)
-        items
-        examples
-    
+        |> Array.map (fun x ->
+            match x with
+            | "ExampleName" -> x
+            | x -> CollectionItem.Parse x |> CollectionItem.ToLaTeXName)
+    in
+    Seq.map Array.ofSeq s
+    |> Array.ofSeq
+    |> fun x ->
+        x[0] <- newHeader;
+        printStrTableInLaTeX x
+
+/// input items to collect as well as the examples of form (name, exampleContent)
+let runAutoLaTeXTableCollection items examples =
+    runAutoTableCollection latexTabGen items examples
+
+/// another version of collecting stuff in ONE ROUND, better control
+let runAutoTpAndEttLaTeXTableCollection items examples stopWhenFirstTimeout =
+    let table =
+        runAutoTableCollection id items examples stopWhenFirstTimeout
+        |> Seq.map Array.ofSeq
+        |> Array.ofSeq
+    in
+    let findTableColumnNotContaining (word : string) =
+        Array.transpose table
+        |> Array.filter (fun x -> not $ (Array.head x).ToLower().Contains(word.ToLower()))
+        |> Array.transpose
+    let tpTable = findTableColumnNotContaining "CIEtt" in
+    let ettTable = findTableColumnNotContaining "CITp" in
+    latexTabGen tpTable, latexTabGen ettTable
 
 /// run the examples from Wang et al. and print the latex table
 let runAutoCollectWangExampleData itemsToCollect =
@@ -2379,15 +2434,15 @@ let private extractResItem (res : FinalResult list) (item : FinalResult) =
     
 // -------------------------------- Compare Direct & Indirect pPDA Results --------------------------------
     
-let private collectPpdaCmpRes filePath =
+let private collectPpdaCmpRes example =
     // PRE-RUN to reduce system issues
     Flags.DIRECT_PPDA <- false;
-    runAFile filePath;
+    runFromString example;
     Flags.DIRECT_PPDA <- true;
-    runAFile filePath;
+    runFromString example;
     let directResult = List.rev Flags.RESULT_ACC in
     Flags.DIRECT_PPDA <- false;
-    runAFile filePath;
+    runFromString example;
     let convertResult = List.rev Flags.RESULT_ACC in
     (directResult, convertResult)
     
@@ -2473,18 +2528,302 @@ let private printCmpRes dirRes convRes =
     let convMap = toResMap convRes in
     compareMaps dirMap convMap
     
-let runPpdaCmp filePath =
+let runPpdaCmp example =
     // collect results
-    let dirRes, convRes = collectPpdaCmpRes filePath in
-    
-    // print the results
-    printSepCmpRes dirRes convRes;
+    let dirRes, convRes = collectPpdaCmpRes example in
     
     // print the comparisons
     printCmpRes dirRes convRes
     
-let testRunPpdaCmp () =
-    Flags.TP_RUN_BOTH_ITER_AND_BISEC <- true;
-    Flags.DEBUG <- true;
-    runPpdaCmp "../../../../more examples/pPDA/new example 1 (sequential 10).txt"
+let runPpdaCmpLaTeXTableGen () =
+    let rec repStr n s =
+        match n with
+        | 0 -> ""
+        | 1 -> s
+        | _ -> s + repStr (n - 1) s
+    in
+    let sequentialN n =
+        "%BEGIN pPDA config
+         q0 := q
+         gamma0 := S
+         %END pPDA config
+ 
+         %BEGIN pPDA rules\n" +
+         $"q S -> q" + repStr n " qF" + ".
+         q qF -> q F.
+         t qF -> q F.
+         f qF -> q F.
+         q F (1 / 4)-> t .
+         q F (1 / 4)-> f .
+         q F (1 / 2)-> q F FI.
+         t FI -> q F.
+         f FI -> f .
+         %END pPDA rules"
+    in
+    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
+    let examples =
+        // mode of conducting sequential test on the `sequentialN` example series.
+        let mapper idx = ($"{idx}", sequentialN idx) in
+        List.map mapper [1..14] ++
+        // mode of testing all `cert` examples
+        getFilesWithContent "../../../../more examples/pPDA/cert/" "txt"
+        // mode of the new and-or-tree example
+//        [ "and-or-tree", readFileString "../../../../more examples/pPDA/new and-or-tree example.txt" ]
+    in
+    let tpToCollect =
+        [
+            CIpPDAConvTime
+//            CITpIsAST
+//            CITpBisecVal
+//            CITpIterVal
+//            CITpEqSysTotalConsTime
+//            CITpASTTime
+//            CITpBisecTime
+//            CITpIterTime
+//            CITpEqPrimitiveScale
+//            CITpEqSimpScale
+//            CITpIterRoundNumber
+        ]
+    in
+    let ettToCollect =
+        [
+//            CIEttHasVal
+//            CIEttIsPAST
+//            CIEttRawBisecVal
+//            CIEttRawIterVal
+//            CIEttEqSysTotalConsTime
+////            CIEttQualTime
+////            CIEttBisecTime
+//            CIEttIterTime
+//            CIEttEqPrimitiveScale
+//            CIEttEqSimpScale
+//            CIEttIterRoundNumber
+        ]
+    in
+    let run () =
+        let run () =
+            runAutoTpAndEttLaTeXTableCollection (tpToCollect ++ ettToCollect) examples false
+        in
+    //    Flags.INNER_DEBUG <- true;
+    //    Flags.CORE_TIME_OUT <- Some $ TimeSpan.FromSeconds 30;
+        // run conversion-based
+        Flags.DIRECT_PPDA <- false;
+        let convTables = run () in
+        // run direct-way
+        Flags.DIRECT_PPDA <- true;
+        let directTables = run () in
+        printfn "-------------------- Conversion-Based --------------------";
+        printfn $"{convTables}";
+        printfn "-------------------- Direct-pPDA --------------------";
+        printfn $"{directTables}"
+    in
+    (Thread((fun () -> run ()), 104857600)).Start ()
+    
+let runGenATpAndEttLaTeXTable examples =
+    let tpTab, ettTab =
+        runAutoTpAndEttLaTeXTableCollection
+            (stdTpDataToCollect ++ stdEttDataToCollect)
+            examples
+            false
+    in
+    println $ "TP:\n" + tpTab + "\nETT:\n" + ettTab
+    
+let runSeparateExampleLaTeXTableGen () =
+    let examples =
+        [
+//            "example1.txt", readFileString "../../../../more examples/rPTSA/example 1.txt"
+            "and-or-tree-0", readFileString "../../../../more examples/pPDA/new and-or-tree example.txt"
+        ]
+    in
+    runGenATpAndEttLaTeXTable examples
+    
+let runPpdaCmpExamples examples =
+    let printer (name, (dirRes, convRes)) =
+        printf "====================== "
+        printf $"{name}"
+        printfn " ======================"
+        printCmpRes dirRes convRes
+        printf "====================== END "
+        printf $"{name}"
+        printfn " ======================"
+    in
+    List.map (BiMap.sndMap collectPpdaCmpRes) examples
+    |> List.iter printer
+    
+let testRunCertExamples () =
+    Flags.TP_APPROX_BY_BISECTION <- false;
+    Flags.TP_QUALITATIVE <- false;
+    Flags.CHECK_PAST <- false;
+    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
+    getFilesWithContent "../../../../more examples/pPDA/cert/" "txt"
+    |> runPpdaCmpExamples
+    
+let runGenCertExamplesTables () =
+    Flags.TP_APPROX_BY_BISECTION <- false;
+    Flags.TP_QUALITATIVE <- false;
+    Flags.CHECK_PAST <- false;
+    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
+    getFilesWithContent "../../../../more examples/pPDA/cert/" "txt"
+    |> List.map (BiMap.sndMap collectPpdaCmpRes)
+    
+let testSeqSequentialN () =
+    let rec repStr n s =
+        match n with
+        | 0 -> ""
+        | 1 -> s
+        | _ -> s + repStr (n - 1) s
+    in
+    let sequentialN n =
+        "%BEGIN pPDA config
+         q0 := q
+         gamma0 := S
+         %END pPDA config
+ 
+         %BEGIN pPDA rules\n" +
+         $"q S -> q" + repStr n " qF" + ".
+         q qF -> q F.
+         t qF -> q F.
+         f qF -> q F.
+         q F (1 / 4)-> t .
+         q F (1 / 4)-> f .
+         q F (1 / 2)-> q F FI.
+         t FI -> q F.
+         f FI -> f .
+         %END pPDA rules"
+    in
+    let run () =
+        println $ runAutoCollectStdDataToLaTeXTable sequentialN [1..14] None
+    in
+    (Thread((fun () -> run ()), 104857600)).Start ()
+    
+    
+let private andOrTreeExample (z, y, xa, xo, has_a0, has_a1) =
+    $"let z = {z}" +
+    $"let y = {y}" +
+    $"let xa = {xa}" +
+    $"let x0 = {xo}" +
+    "" +
+    "
+    %BEGIN pPDA config
+    q0 = q0
+    gamma0 = bot
+    %END pPDA config
+
+    %BEGIN pPDA rules
+    // push an counter to start
+    q0 bot -> and_init c bot.
+
+    // done
+    " +
+    (if has_a0 then "or_return_0 bot -> q0." else "") +
+    (if has_a1 then "or_return_1 bot -> q0." else "") +
+    "
+    // rules for leaf
+    and_init c (y z)-> or_return_1.
+    and_init c (y (1 - z))-> or_return_0.
+
+    // rules for OR
+    and_init c (1 - y)-> or_init c c.
+
+    // rules for OR returns 1, call another OR or not
+    and_return_1 c (1 - xa) -> or_init c c.
+    and_return_1 c (xa) -> or_return_1.
+
+    // rules for OR returns 0, return 0
+    and_return_0 c -> or_return_0.
+
+    // OR leaf
+    or_init c (y z) -> and_return_1.
+    or_init c (y (1 - z)) -> and_return_0.
+
+    // call AND
+    or_init c (1 - y) -> and_init c c.
+
+    // if AND returns 0, decide whether to call another AND
+    or_return_0 c (1 - x0) -> and_init c c.
+    or_return_0 c (x0) -> and_return_0.
+
+    // if AND returns 1, return 1
+    or_return_1 c -> and_return_1.
+    %END pPDA rules
+    "
+    
+let private andOrTreeParams =
+    let series (x, y, z, a) =
+        [
+            x, y, z, a, true, false
+            x, y, z, a, false, true
+            x, y, z, a, true, true
+        ]
+    List.concat $ List.map series [
+        // series 1
+        "0.5", "0.4", "0.2", "0.2"
+        "0.5", "0.4", "0.2", "0.4"
+        "0.5", "0.4", "0.2", "0.6"
+        "0.5", "0.4", "0.2", "0.8"
+        // series 2
+        "0.5", "0.5", "0.1", "0.1"
+        "0.5", "0.5", "0.2", "0.1"
+        "0.5", "0.5", "0.3", "0.1"
+        "0.5", "0.5", "0.4", "0.1"
+        // series 3
+        "0.2", "0.4", "0.2", "0.2"
+        "0.3", "0.4", "0.2", "0.2"
+        "0.4", "0.4", "0.2", "0.2"
+        "0.5", "0.4", "0.2", "0.2"
+    ]
+    
+let private getAndOrTreeName (x, y, z, a, has_a0, has_a1) =
+    let postfix = $"({x},{y},{z},{a})" in
+    let prefix =
+        match has_a0, has_a1 with
+        | true, true -> "[a]"
+        | true, false -> "[a|0]"
+        | false, true -> "[a|1]"
+        | false, false -> "ERROR"
+    in
+    prefix + postfix
+    
+let runGenAndOrTreeLaTeXTables () =
+    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
+    let examples =
+        List.map (fun x -> (getAndOrTreeName x, andOrTreeExample x)) andOrTreeParams
+    in
+    let ettToCollect =
+        [
+//            CIEttHasVal
+//            CIEttIsPAST
+//            CIEttRawBisecVal
+            CIEttRawIterVal
+            CIEttEqSysTotalConsTime
+//            CIEttQualTime
+//            CIEttBisecTime
+            CIEttIterTime
+            CIEttEqPrimitiveScale
+            CIEttEqSimpScale
+            CIEttIterRoundNumber
+        ]
+    in
+    let toCollect =
+        stdTpDataToCollect ++ ettToCollect
+//        [ CIpPDAConvTime ]
+    in
+    Flags.DIRECT_PPDA <- false;
+    let convTpTab, convEttTab =
+        runAutoTpAndEttLaTeXTableCollection
+            toCollect
+            examples
+            false
+    in
+    Flags.DIRECT_PPDA <- true;
+    let dirTpTab, dirEttTab =
+        runAutoTpAndEttLaTeXTableCollection
+            toCollect
+            examples
+            false
+    in
+    println "-------------------- Conversion Method --------------------"
+    println $ "TP:\n" + convTpTab + "\nETT:\n" + convEttTab
+    println "-------------------- Direct Method --------------------"
+    println $ "TP:\n" + dirTpTab + "\nETT:\n" + dirEttTab
     

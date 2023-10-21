@@ -1,0 +1,11 @@
+// gen-fun
+
+%BEGIN pBPA config
+gamma0 := GenFun
+%END pBPA config
+
+%BEGIN pBPA rules
+GenFun -> GenExpr GenExpr.
+GenExpr (7 / 10)-> .
+GenExpr (3 / 10)-> GenExpr GenExpr.
+%END pBPA rules
