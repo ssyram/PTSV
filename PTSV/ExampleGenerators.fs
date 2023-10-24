@@ -2287,3 +2287,94 @@ let genQueueGlobalRandomServe pA pB pEnd pSA shortcutType times =
     in
     genModelFromFormattedRules (uint times) qInit (m 0) root rules
     
+    
+let genAndOrTreeExample (z, y, xa, xo, has_a0, has_a1) =
+    $"let z = {z}" +
+    $"let y = {y}" +
+    $"let xa = {xa}" +
+    $"let x0 = {xo}" +
+    "" +
+    "
+    %BEGIN pPDA config
+    q0 = q0
+    gamma0 = bot
+    %END pPDA config
+
+    %BEGIN pPDA rules
+    // push an counter to start
+    q0 bot -> and_init c bot.
+
+    // done
+    " +
+    (if has_a0 then "or_return_0 bot -> q0." else "") +
+    (if has_a1 then "or_return_1 bot -> q0." else "") +
+    "
+    // rules for leaf
+    and_init c (y z)-> or_return_1.
+    and_init c (y (1 - z))-> or_return_0.
+
+    // rules for OR
+    and_init c (1 - y)-> or_init c c.
+
+    // rules for OR returns 1, call another OR or not
+    and_return_1 c (1 - xa) -> or_init c c.
+    and_return_1 c (xa) -> or_return_1.
+
+    // rules for OR returns 0, return 0
+    and_return_0 c -> or_return_0.
+
+    // OR leaf
+    or_init c (y z) -> and_return_1.
+    or_init c (y (1 - z)) -> and_return_0.
+
+    // call AND
+    or_init c (1 - y) -> and_init c c.
+
+    // if AND returns 0, decide whether to call another AND
+    or_return_0 c (1 - x0) -> and_init c c.
+    or_return_0 c (x0) -> and_return_0.
+
+    // if AND returns 1, return 1
+    or_return_1 c -> and_return_1.
+    %END pPDA rules
+    "
+    
+let andOrTreeParams =
+    let series (x, y, z, a) =
+        [
+            x, y, z, a, true, false
+            x, y, z, a, false, true
+            x, y, z, a, true, true
+        ]
+    List.concat $ List.map series [
+        // series 1
+        "0.5", "0.4", "0.2", "0.2"
+        "0.5", "0.4", "0.2", "0.4"
+        "0.5", "0.4", "0.2", "0.6"
+        "0.5", "0.4", "0.2", "0.8"
+        // series 2
+        "0.5", "0.5", "0.1", "0.1"
+        "0.5", "0.5", "0.2", "0.1"
+        "0.5", "0.5", "0.3", "0.1"
+        "0.5", "0.5", "0.4", "0.1"
+        // series 3
+        "0.2", "0.4", "0.2", "0.2"
+        "0.3", "0.4", "0.2", "0.2"
+        "0.4", "0.4", "0.2", "0.2"
+        "0.5", "0.4", "0.2", "0.2"
+    ]
+    
+let getAndOrTreeName (x, y, z, a, has_a0, has_a1) =
+    let postfix = $"({x},{y},{z},{a})" in
+    let prefix =
+        match has_a0, has_a1 with
+        | true, true -> "[a]"
+        | true, false -> "[a|0]"
+        | false, true -> "[a|1]"
+        | false, false -> "ERROR"
+    in
+    prefix + postfix
+    
+let andOrTreeExamples () =
+    List.map (fun x -> (getAndOrTreeName x, genAndOrTreeExample x)) andOrTreeParams
+    

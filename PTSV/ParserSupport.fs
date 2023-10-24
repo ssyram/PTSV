@@ -1028,6 +1028,7 @@ let produceModel defs (probModel : ParseModel) =
                 ret
         | ModelPBPA (gamma0, pbpaRules) ->
             resultPrint $ RReadFormat "pBPA";
+            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "pBPA" else "rPTSA");
             Flags.CHECK_K <- false;
             // X |-> s
             let maybeMap = flip Option.map draMapping $

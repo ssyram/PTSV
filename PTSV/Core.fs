@@ -2488,6 +2488,10 @@ let iteratingExprSystem
 //                    elif boundOne && x > NUMERIC_ONE then NUMERIC_ONE
 //                    else x)
             in
+//            let checkOverflow numToTest =
+//                if numToTest >= MAX_FLOAT_VAL then raise $ OverflowException ()
+//            in
+//            Array.iter checkOverflow nextVals;
             Array.zip nextVals vals
             |> Array.map (uncurry (-) >> abs)
             |> Array.max

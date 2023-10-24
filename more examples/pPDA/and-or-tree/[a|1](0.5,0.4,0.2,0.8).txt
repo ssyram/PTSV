@@ -1,0 +1,41 @@
+let z = 0.5let y = 0.4let xa = 0.2let x0 = 0.8
+    %BEGIN pPDA config
+    q0 = q0
+    gamma0 = bot
+    %END pPDA config
+
+    %BEGIN pPDA rules
+    // push an counter to start
+    q0 bot -> and_init c bot.
+
+    // done
+    or_return_1 bot -> q0.
+    // rules for leaf
+    and_init c (y z)-> or_return_1.
+    and_init c (y (1 - z))-> or_return_0.
+
+    // rules for OR
+    and_init c (1 - y)-> or_init c c.
+
+    // rules for OR returns 1, call another OR or not
+    and_return_1 c (1 - xa) -> or_init c c.
+    and_return_1 c (xa) -> or_return_1.
+
+    // rules for OR returns 0, return 0
+    and_return_0 c -> or_return_0.
+
+    // OR leaf
+    or_init c (y z) -> and_return_1.
+    or_init c (y (1 - z)) -> and_return_0.
+
+    // call AND
+    or_init c (1 - y) -> and_init c c.
+
+    // if AND returns 0, decide whether to call another AND
+    or_return_0 c (1 - x0) -> and_init c c.
+    or_return_0 c (x0) -> and_return_0.
+
+    // if AND returns 1, return 1
+    or_return_1 c -> and_return_1.
+    %END pPDA rules
+    

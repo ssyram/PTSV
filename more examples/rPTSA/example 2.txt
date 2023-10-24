@@ -3,7 +3,7 @@
 // p <= 1/2 : P = 1
 // p > 1/2 : P = (1 - p) / p
 
-let p = 0.3
+let p = 0.5
 
 %BEGIN rPTSA config
 Restriction := 1

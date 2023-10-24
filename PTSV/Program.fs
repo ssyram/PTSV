@@ -16,20 +16,85 @@ let from whom =
     sprintf "from %s" whom
 
 let mutable filePath = []
-let mutable inTpMode = true
-let mutable tpSpecified = false
-let mutable ettSpecified = false
+type TerProbConfig =
+    {
+        tpQual : bool
+        tpApprox : bool
+        tpApproxByIter : bool
+        tpApproxByBisec : bool
+    }
+type TerProbMode =
+    | TpMDefault
+    | TpMConfig of TerProbConfig
+    member x.Change f =
+        match x with
+        | TpMDefault -> TpMConfig $ f { tpQual = false
+                                        tpApprox = false
+                                        tpApproxByIter = false
+                                        tpApproxByBisec = false }
+        | TpMConfig config -> TpMConfig $ f config
+    member x.TakeEffect () =
+        match x with
+        | TpMDefault ->
+            Flags.TP_APPROXIMATION <- true;
+            Flags.TP_QUALITATIVE <- true;
+            Flags.TP_RUN_BOTH_ITER_AND_BISEC <- false;
+            Flags.TP_APPROX_BY_BISECTION <- false
+        | TpMConfig config ->
+            Flags.TP_QUALITATIVE <- config.tpQual;
+            Flags.TP_APPROXIMATION <- config.tpApprox;
+            Flags.TP_RUN_BOTH_ITER_AND_BISEC <-
+                config.tpApproxByBisec && config.tpApproxByIter;
+            Flags.TP_APPROX_BY_BISECTION <-
+                config.tpApproxByBisec && not config.tpApproxByIter
+            
+type ExpTerTimeConfig =
+    {
+        ettQual : bool
+        ettApprox : bool
+        ettApproxByIter : bool
+        ettApproxByBisec : bool
+    }
+type ExpTerTimeMode =
+    | EttMDefault
+    | EttMConfig of ExpTerTimeConfig
+    member x.Change f =
+        match x with
+        | EttMDefault -> EttMConfig $ f { ettQual = false
+                                          ettApprox = false
+                                          ettApproxByIter = false
+                                          ettApproxByBisec = false }
+        | EttMConfig config -> EttMConfig $ f config
+    member x.TakeEffect () =
+        match x with
+        | EttMDefault ->
+            Flags.ETT_APPROXIMATION <- true;
+            Flags.ETT_QUALITATIVE <- true;
+            Flags.ETT_RUN_BOTH_ITER_AND_BISEC <- false;
+            Flags.ETT_APPROX_BY_BISECTION <- false
+        | EttMConfig config ->
+            Flags.ETT_QUALITATIVE <- config.ettQual;
+            Flags.ETT_APPROXIMATION <- config.ettApprox;
+            Flags.ETT_RUN_BOTH_ITER_AND_BISEC <-
+                config.ettApproxByBisec && config.ettApproxByIter;
+            Flags.ETT_APPROX_BY_BISECTION <-
+                config.ettApproxByBisec && not config.ettApproxByIter
+type TpEttMode = TpMode | EttMode | NoMode
+let mutable tpEttMode = NoMode
+let mutable tpMode = TpMDefault
+let mutable ettMode = EttMDefault
+    
 
 let printMenu () =
-    printfn "usage: ./PTSV [-f] <file path>"
+    printfn "usage: ./PTSV <file path> {option}*"
     printfn "options:"
-    printfn "-d / -debug: printing various debugging information"
     printfn "-tp: to config what to analyse for termination probability"
     printfn "-ett: to config what to anlyse for expected termination time"
     printfn "-approx: to approximate the value"
     printfn "-qual: to compute qualitative results (AST / PAST)"
     printfn "-iter: to approximate the value by iteration"
     printfn "-bisec: to approximate the value by bisection (via Z3)"
+    printfn "-d / -debug: printing various debugging information"
     printfn "-min_diff NUMBER: specify iteration minimum difference as the iteration convergence criterion (by default 1e-6)"
     printfn "-accuracy NUMBER: specify bisection accuracy (by default 1e-6)"
     printfn "-max_iter_round NUMBER: specify maximum iteration rounds (by default infty)"
@@ -45,6 +110,8 @@ let printMenu () =
     printfn "-k / -check_k: check whether the declared `k` is correct (HIGH COST)"
 
 let runAccordingToArgConfig () =
+    tpMode.TakeEffect ();
+    ettMode.TakeEffect ();
     match filePath with
     | [] -> printMenu ()
     | modelPath ->
@@ -165,43 +232,56 @@ let rec argumentAnalysis argv =
         setFilePath fp;
         argumentAnalysis l
     | approx :: l when isApprox true approx ->
-        if inTpMode then
-            Flags.TP_APPROXIMATION <- true
-        else
-            Flags.ETT_APPROXIMATION <- true
-        argumentAnalysis l
+        match tpEttMode with
+        | NoMode ->
+            printfn "No \"-tp\" and \"-ett\" specified."
+        | TpMode ->
+            tpMode <- tpMode.Change (fun ctx -> { ctx with tpApprox = true });
+            argumentAnalysis l
+        | EttMode ->
+            ettMode <- ettMode.Change (fun ctx -> { ctx with ettApprox = true });
+            argumentAnalysis l
     | qual :: l when isQualitative true qual ->
-        if inTpMode then
-            Flags.TP_QUALITATIVE <- true
-        else
-            Flags.ETT_QUALITATIVE <- true
-        argumentAnalysis l
+        match tpEttMode with
+        | NoMode -> 
+            printfn "No \"-tp\" and \"-ett\" specified."
+        | TpMode ->
+            tpMode <- tpMode.Change (fun ctx -> { ctx with tpQual = true });
+            argumentAnalysis l
+        | EttMode ->
+            ettMode <- ettMode.Change (fun ctx -> { ctx with ettQual = true });
+            argumentAnalysis l
     | ("-iter" | "-iteration" | "-iterating") :: l ->
-        if inTpMode then
-            Flags.TP_APPROX_BY_BISECTION <- false
-        else
-            Flags.ETT_APPROX_BY_BISECTION <- false;
-        argumentAnalysis l
+        match tpEttMode with
+        | NoMode -> 
+            printfn "No \"-tp\" and \"-ett\" specified."
+        | TpMode ->
+            tpMode <- tpMode.Change (fun ctx -> { ctx with tpApproxByIter = true });
+            argumentAnalysis l
+        | EttMode ->
+            ettMode <- ettMode.Change (fun ctx -> { ctx with ettApproxByIter = true });
+            argumentAnalysis l
     | ("-bisec" | "-bisection") :: l ->
-        if inTpMode then
-            Flags.TP_APPROX_BY_BISECTION <- true
-        else
-            Flags.ETT_APPROX_BY_BISECTION <- true;
-        argumentAnalysis l
-    | ("-b" | "-both") :: l ->
-        if inTpMode then Flags.TP_RUN_BOTH_ITER_AND_BISEC <- true
-        else Flags.ETT_RUN_BOTH_ITER_AND_BISEC <- true;
-        argumentAnalysis l
+        match tpEttMode with
+        | NoMode -> 
+            printfn "No \"-tp\" and \"-ett\" specified."
+        | TpMode ->
+            tpMode <- tpMode.Change (fun ctx -> { ctx with tpApproxByBisec = true });
+            argumentAnalysis l
+        | EttMode ->
+            ettMode <- ettMode.Change (fun ctx -> { ctx with ettApproxByBisec = true });
+            argumentAnalysis l
     | ("-a" | "-all") :: l ->
-        tpSpecified <- true;
-        ettSpecified <- true;
-        Flags.TP_QUALITATIVE <- true;
-        Flags.TP_APPROXIMATION <- true;
-        Flags.ETT_QUALITATIVE <- true;
-        Flags.CHECK_PAST <- true;
-        Flags.ETT_APPROXIMATION <- true;
-        Flags.TP_RUN_BOTH_ITER_AND_BISEC <- true;
-        Flags.ETT_RUN_BOTH_ITER_AND_BISEC <- true;
+        tpMode <- tpMode.Change $ fun ctx ->
+            { ctx with tpApprox = true
+                       tpQual = true
+                       tpApproxByBisec = true
+                       tpApproxByIter = true };
+        ettMode <- ettMode.Change $ fun ctx ->
+            { ctx with ettApprox = true
+                       ettQual = true
+                       ettApproxByBisec = true
+                       ettApproxByIter = true };
         argumentAnalysis l
     | "-display" :: mode :: l ->
         match mode with
@@ -213,28 +293,11 @@ let rec argumentAnalysis argv =
             else errPrint $"Unknown Display Mode: \"{mode}\"."
         | _ -> errPrint $"Unknown Display Mode: \"{mode}\".";
         argumentAnalysis l
-//    | "-p" :: quan :: op :: number :: l when isQuantitative false quan ->
-//        try
-//            problemConfig <-
-//                PTQuantitative
-//                    (PQnRunByNLSat,
-//                     QueryType.Parse op,
-//                     NumericType.Parse number)
-//        with
-//        | e ->
-//            eprintfn
-//                $"Warning: {e.Message}\nHint: for quantitative problem, comparator and number should be provided."
-//        argumentAnalysis l
     | "-tp" :: l ->
-        inTpMode <- true
-        if not tpSpecified then
-            Flags.TP_APPROXIMATION <- false
-            Flags.TP_QUALITATIVE <- false
-            Flags.CHECK_PAST <- false
-        tpSpecified <- true
-        if not ettSpecified then
-            Flags.ETT_APPROXIMATION <- false
-            Flags.ETT_QUALITATIVE <- false
+        tpEttMode <- TpMode;
+        match tpMode with
+        | TpMDefault -> tpMode <- tpMode.Change id
+        | TpMConfig _ -> ();
         argumentAnalysis l
     | "-ppda" :: l ->
         Flags.DIRECT_PPDA <- true
@@ -243,25 +306,24 @@ let rec argumentAnalysis argv =
         Flags.DIRECT_PPDA <- false
         argumentAnalysis l
     | "-ett" :: l ->
-        inTpMode <- false
-        if not ettSpecified then
-            Flags.ETT_APPROXIMATION <- false
-            Flags.ETT_QUALITATIVE <- false
-        ettSpecified <- true
-        if not tpSpecified then
-            Flags.TP_APPROXIMATION <- false
-            Flags.TP_QUALITATIVE <- false
-            Flags.CHECK_PAST <- false
+        tpEttMode <- EttMode;
+        match ettMode with
+        | EttMDefault -> ettMode <- ettMode.Change id
+        | EttMConfig _ -> ();
         argumentAnalysis l
     | quan :: op :: number :: l when isQuantitative true quan ->
         try
-            if inTpMode then
+            match tpEttMode with
+            | NoMode ->
+                printfn "No \"-tp\" and \"-ett\" specified.";
+                printfn "Hence quantitative inquiry is not specified."
+            | TpMode -> 
                 Flags.TP_QUANTITATIVE_INQUIRY <-
                     Some ((QueryType.Parse op).ToString (), NumericType.Parse number)
-            else
-//                Flags.ETT_QUANTITATIVE_INQUIRY <-
-//                    Some ((QueryType.Parse op).ToString (), NumericType.Parse number)
-                printfn "Warning: Do no support quantitative inquiry for ETT."
+            | EttMode ->
+                Flags.ETT_QUANTITATIVE_INQUIRY <-
+                    Some ((QueryType.Parse op).ToString (), NumericType.Parse number);
+                printfn "Warning: Support only quantitative inquiry for the raw ETT."
         with
         | e ->
             eprintfn
@@ -290,9 +352,6 @@ let rec argumentAnalysis argv =
     | ("-max_iter_round" | "-max_iter" | "-max_round") :: number :: l ->
         Flags.MAX_ITER_ROUND <- Some (uint64 (Double.Parse number))
         argumentAnalysis l
-//    | "-ns" :: l ->
-//        Flags.SIMPLIFY <- false
-//        argumentAnalysis l
     | "-report_stuck" :: l ->
         Flags.REPORT_STUCK <- true
         argumentAnalysis l
@@ -303,12 +362,6 @@ let rec argumentAnalysis argv =
         let rawNum = Double.Parse num
         Flags.CORE_TIME_OUT <- Some (TimeSpan.FromMilliseconds rawNum)
         argumentAnalysis l
-//    | "-ld" :: ldpath :: l ->
-//        External.LD_LIBRARY_PATH <- ldpath
-//        argumentAnalysis l
-//    | "-max_var" :: num :: l ->
-//        Flags.MAXIMUM_ALLOWED_VARIABLE_AMOUNT <- UInt64.Parse num
-//        argumentAnalysis l
     | "-inner_debug" :: l ->
         // a command not displayed in menu
         Flags.INNER_DEBUG <- true
@@ -342,10 +395,10 @@ let rec argumentAnalysis argv =
             Flags.PRELOAD_BINDINGS <- Map.add ss[0] (NumericType.Parse ss[1]) Flags.PRELOAD_BINDINGS
         else printfn "Warning: not a valid variable def, nothing is added to binding."
         argumentAnalysis l
-    | "-I_know_there_is_value_for_ett" :: l ->
-        Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true
-        Flags.ETT_QUALITATIVE <- false
-        argumentAnalysis l
+//    | "-I_know_there_is_value_for_ett" :: l ->
+//        Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true
+//        Flags.ETT_QUALITATIVE <- false
+//        argumentAnalysis l
     | "-bfs" :: l ->
         Flags.BUILD_BFS <- true
         argumentAnalysis l

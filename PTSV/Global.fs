@@ -257,10 +257,10 @@ type FinalResult =
     | REttQualTime of TimeSpan
     | REttHasVal of Result<bool, string>  // either the result or the error message
     | REttIsPAST of Result<bool, string>  // either the result or the error message
-    | REttApproxValBisec of NumericType
-    | REttApproxValIter of NumericType
-    | REttApproxRawValBisec of NumericType
-    | REttApproxRawValIter of NumericType
+    | REttApproxValBisec of Result<NumericType, string>
+    | REttApproxValIter of Result<NumericType, string>
+    | REttApproxRawValBisec of Result<NumericType, string>
+    | REttApproxRawValIter of Result<NumericType, string>
     | REttApproxIterTimes of uint64
     | REttApproxTimeBisec of TimeSpan
     | REttApproxTimeIter of TimeSpan
@@ -298,6 +298,10 @@ type FinalResult =
             match res with
             | Ok b -> $"{b}"
             | Error msg -> msg.ToString().ToUpper()
+        | :? Result<NumericType, string> as res ->
+            match res with
+            | Ok p -> numericValuePrint p
+            | Error msg -> msg.ToString()
         | :? string as str -> str
         | _ -> numericValuePrint obj
     /// get the unique printing name of the field as well as the unique field as `obj`
@@ -346,8 +350,7 @@ module Flags =
     let mutable COMPUTE_EXPECTED_TERMINATION_TIME_VALUE = false
     let mutable ALLOW_ITER_ROUND_UP = true
     let mutable PRINT_ITER_VALUES = false
-    let mutable EXTERNAL_ETT_QUALITATIVE_CONFIRM = false
-    let mutable COMPUTE_NON_AST_EXPECTED_TERMINATION_TIME = false
+//    let mutable EXTERNAL_ETT_QUALITATIVE_CONFIRM = false
     let mutable CORE_TIME_OUT : TimeSpan option = None
     let mutable LINEAR_MAP_SYMBOL = "->"
     /// allow translation-style optimisation, like list increasing
@@ -371,11 +374,11 @@ module Flags =
     let mutable TP_APPROXIMATION = true
     let mutable TP_QUALITATIVE = true
     let mutable TP_QUANTITATIVE_INQUIRY : (string * NumericType) option = None
-    let mutable CHECK_PAST = true
+//    let mutable CHECK_PAST = true
     let mutable ETT_QUALITATIVE = true
     let mutable ETT_APPROXIMATION = true
     let mutable ETT_QUANTITATIVE_INQUIRY : (string * NumericType) option = None
-    let mutable TP_APPROX_BY_BISECTION = true
+    let mutable TP_APPROX_BY_BISECTION = false
     /// by default using iteration
     let mutable ETT_APPROX_BY_BISECTION = false
     let mutable ETT_REUSE_TP_RESULT = true

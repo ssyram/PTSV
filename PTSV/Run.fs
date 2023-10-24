@@ -19,7 +19,6 @@ open Microsoft.FSharp.Core
 open Microsoft.FSharp.Reflection
 open PTSV
 open PTSV.Core
-open PTSV.Global
 open PTSV.Input
 open PTSV.NewEquationBuild
 open PTSV.Problems
@@ -93,117 +92,117 @@ let solveExpectedTerminationTimeExprSystem es =
     in
     Option.map (Array.zip dimVarIndices >> Map.ofSeq) $ gaussianPositiveLFP mat arr
     
-/// Put the raw kptsa to this place, do not conduct epsilon elimination or so
-///
-/// If don't need the approximation value, return constant 1 for there is a value
-let checkPositiveAlmostSureTermination incremental needApproxValue kptsa =
-    innerDebugPrint "Original rPTSA definition."
-    innerDebugPrint $"{kptsa}"
-    let kptsa = epsilonElimination true kptsa
-    innerDebugPrint "rPTSA definition for expected time computation."
-    innerDebugPrint $"{kptsa}"
-    let rptsa = generaliseKPTSA kptsa in
-    let (probPartPes, ettPartPes), x0 =
-        let probPart, incremental = incremental in
-        ((Seq.toList probPart,
-            Seq.toList $ terExpFormulaConstruct (Some incremental) Flags.KPTSA_NORMALISED rptsa), 
-          terExpX0 rptsa)
-//        (constructPrimitiveExpectedTerminationTimeFormulaSystem
-//            Flags.EXPECTED_TERMINATION_TIME_ES_STANDARD_FORM
-//            kptsa, x0New)
-    if Flags.INNER_DEBUG && not Flags.NOT_PRINT_EQ_SYS then begin
-        let pes = probPartPes ++ ettPartPes in
-        let pes = tmpSimplifyFormulaSystem pes in
-        let crtProbPart, crtEttPart =
-            constructPrimitiveExpectedTerminationTimeFormulaSystem
-                Flags.EXPECTED_TERMINATION_TIME_ES_STANDARD_FORM
-                kptsa in
-        let crtPes = crtProbPart ++ crtEttPart in
-        let crtPes = List.ofSeq $ tmpSimplifyFormulaSystem crtPes in
-        let crtPes = newFormulaSystemToGeneralVariableFormulaSystem crtPes in
-        printfn "----------------------------------- Obtained equation system for ETT -----------------------------------"
-        printfn $"{printFormulaSystem pes}"
-        printfn "----------------------------------- Obtained correct equation system for ETT -----------------------------------"
-        printfn $"{printFormulaSystem crtPes}";
-        
-        let es, esMap = formulaSystemToExprSystemWithHint (Seq.toList pes) (Map (seq {x0, 0})) in
-        let crtEs, crtEsMap = formulaSystemToExprSystemWithHint (Seq.toList crtPes) (Map (seq {terExpX0 rptsa, 0})) in
-        let es = simplifyExprSystem FPTLeast es in
-        let crtEs = simplifyExprSystem FPTLeast crtEs in
-        printfn "----------------------------------- Obtained equation system for ETT -----------------------------------"
-        printfn $"{printFormulaSystem $ backToFormulaSystem esMap es}"
-        printfn "----------------------------------- Obtained correct equation system for ETT -----------------------------------"
-        printfn $"{printFormulaSystem $ backToFormulaSystem crtEsMap crtEs}"
-    end
-        
-            
-    // re-map
-    let probPartEs, dic = formulaSystemToExprSystemWithHint probPartPes (Map (seq {x0, 0})) in
-    let ettPartEs, dic = formulaSystemToExprSystemWithHint ettPartPes dic in
-    
-    let probPartEs,ettPartEs =
-        let isProbMap =
-            Map.toSeq dic
-            |> Seq.map (BiMap.fstMap (function | PVCProb _ -> true | _ -> false))
-            |> Seq.map swap
-            |> HashMap.fromSeq in
-        simplifyExprSystem FPTLeast (probPartEs ++ ettPartEs)
-        |> List.partition (fst >> flip HashMap.find isProbMap)
-    in
-    eqSysPrint Flags.INNER_DEBUG $"Obtained equation system for ETT:\n{printExprSystem (probPartEs ++ ettPartEs)}";
-    // just use Z3 to know if there is any result
-    let z3Context, nlsatSolver = genNewZ3Context ()
-    let queryString =
-        genNLSatDeclarePart probPartEs true +
-        // bugfix : ett part should not have 1 bound -- it should only >= 0.
-        genNLSatDeclarePart ettPartEs false +
-        genNLSatEsDefPart probPartEs +
-        genNLSatEsDefPart ettPartEs +
-        NLSatTriggerString
-    let checkExistence () =
-        let query = z3Context.ParseSMTLIB2String queryString
-        turnZ3SolverResultIntoBool nlsatSolver query
-    let computeValue () =
-        eqSysPrint true $"{printExprSystem (List.append probPartEs ettPartEs)}"
-        let res =
-            if List.isEmpty probPartEs then
-                solveExpectedTerminationTimeExprSystem ettPartEs
-            else
-                let replaceMap =
-                    if Flags.ITER_BY_PREMO then
-                        Map(iterByPReMo probPartEs)
-                    else
-                        Map(fst $ iteratingExprSystem probPartEs Flags.MAX_ITER_ROUND Flags.APPROX_MIN_DIFF)
-                
-                // to print the final results
-                Map.toSeq replaceMap
-                |> Seq.map (fun (vId, num) -> $"""x{vId} = {num.ToString "N30"}""")
-                |> String.concat "\n"
-                |> eqSysPrint true;
-                
-                let subsFunc vId =
-                    match Map.tryFind vId replaceMap with
-                    | Some c -> EConst c
-                    | None -> EVar vId
-                // bugfix: should use `normalise` rather than `optimise` here
-                //         because the `solveExpectedTerminationTimeExprSystem` function is strict to the shape of
-                //         the input equation system
-                let es = List.map (fun (i, e) -> (i, substituteVar subsFunc e)) ettPartEs in
-                processPrint $"Final ES to solve:\n{printExprSystem es}";
-                // todo: fix this function, let it be better -- make it possible to solve the infinite case
-                solveExpectedTerminationTimeExprSystem es
-        match res with
-        | Some values -> Some values[0]
-        | None -> None
-    if Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM then
-        if needApproxValue then
-            computeValue ()
-        else Some NUMERIC_ONE
-    else
-        if checkExistence () then
-            if not needApproxValue then Some NUMERIC_ONE
-            else computeValue ()
-        else None
+///// Put the raw kptsa to this place, do not conduct epsilon elimination or so
+/////
+///// If don't need the approximation value, return constant 1 for there is a value
+//let checkPositiveAlmostSureTermination incremental needApproxValue kptsa =
+//    innerDebugPrint "Original rPTSA definition."
+//    innerDebugPrint $"{kptsa}"
+//    let kptsa = epsilonElimination true kptsa
+//    innerDebugPrint "rPTSA definition for expected time computation."
+//    innerDebugPrint $"{kptsa}"
+//    let rptsa = generaliseKPTSA kptsa in
+//    let (probPartPes, ettPartPes), x0 =
+//        let probPart, incremental = incremental in
+//        ((Seq.toList probPart,
+//            Seq.toList $ terExpFormulaConstruct (Some incremental) Flags.KPTSA_NORMALISED rptsa), 
+//          terExpX0 rptsa)
+////        (constructPrimitiveExpectedTerminationTimeFormulaSystem
+////            Flags.EXPECTED_TERMINATION_TIME_ES_STANDARD_FORM
+////            kptsa, x0New)
+//    if Flags.INNER_DEBUG && not Flags.NOT_PRINT_EQ_SYS then begin
+//        let pes = probPartPes ++ ettPartPes in
+//        let pes = tmpSimplifyFormulaSystem pes in
+//        let crtProbPart, crtEttPart =
+//            constructPrimitiveExpectedTerminationTimeFormulaSystem
+//                Flags.EXPECTED_TERMINATION_TIME_ES_STANDARD_FORM
+//                kptsa in
+//        let crtPes = crtProbPart ++ crtEttPart in
+//        let crtPes = List.ofSeq $ tmpSimplifyFormulaSystem crtPes in
+//        let crtPes = newFormulaSystemToGeneralVariableFormulaSystem crtPes in
+//        printfn "----------------------------------- Obtained equation system for ETT -----------------------------------"
+//        printfn $"{printFormulaSystem pes}"
+//        printfn "----------------------------------- Obtained correct equation system for ETT -----------------------------------"
+//        printfn $"{printFormulaSystem crtPes}";
+//        
+//        let es, esMap = formulaSystemToExprSystemWithHint (Seq.toList pes) (Map (seq {x0, 0})) in
+//        let crtEs, crtEsMap = formulaSystemToExprSystemWithHint (Seq.toList crtPes) (Map (seq {terExpX0 rptsa, 0})) in
+//        let es = simplifyExprSystem FPTLeast es in
+//        let crtEs = simplifyExprSystem FPTLeast crtEs in
+//        printfn "----------------------------------- Obtained equation system for ETT -----------------------------------"
+//        printfn $"{printFormulaSystem $ backToFormulaSystem esMap es}"
+//        printfn "----------------------------------- Obtained correct equation system for ETT -----------------------------------"
+//        printfn $"{printFormulaSystem $ backToFormulaSystem crtEsMap crtEs}"
+//    end
+//        
+//            
+//    // re-map
+//    let probPartEs, dic = formulaSystemToExprSystemWithHint probPartPes (Map (seq {x0, 0})) in
+//    let ettPartEs, dic = formulaSystemToExprSystemWithHint ettPartPes dic in
+//    
+//    let probPartEs,ettPartEs =
+//        let isProbMap =
+//            Map.toSeq dic
+//            |> Seq.map (BiMap.fstMap (function | PVCProb _ -> true | _ -> false))
+//            |> Seq.map swap
+//            |> HashMap.fromSeq in
+//        simplifyExprSystem FPTLeast (probPartEs ++ ettPartEs)
+//        |> List.partition (fst >> flip HashMap.find isProbMap)
+//    in
+//    eqSysPrint Flags.INNER_DEBUG $"Obtained equation system for ETT:\n{printExprSystem (probPartEs ++ ettPartEs)}";
+//    // just use Z3 to know if there is any result
+//    let z3Context, nlsatSolver = genNewZ3Context ()
+//    let queryString =
+//        genNLSatDeclarePart probPartEs true +
+//        // bugfix : ett part should not have 1 bound -- it should only >= 0.
+//        genNLSatDeclarePart ettPartEs false +
+//        genNLSatEsDefPart probPartEs +
+//        genNLSatEsDefPart ettPartEs +
+//        NLSatTriggerString
+//    let checkExistence () =
+//        let query = z3Context.ParseSMTLIB2String queryString
+//        turnZ3SolverResultIntoBool nlsatSolver query
+//    let computeValue () =
+//        eqSysPrint true $"{printExprSystem (List.append probPartEs ettPartEs)}"
+//        let res =
+//            if List.isEmpty probPartEs then
+//                solveExpectedTerminationTimeExprSystem ettPartEs
+//            else
+//                let replaceMap =
+//                    if Flags.ITER_BY_PREMO then
+//                        Map(iterByPReMo probPartEs)
+//                    else
+//                        Map(fst $ iteratingExprSystem probPartEs Flags.MAX_ITER_ROUND Flags.APPROX_MIN_DIFF)
+//                
+//                // to print the final results
+//                Map.toSeq replaceMap
+//                |> Seq.map (fun (vId, num) -> $"""x{vId} = {num.ToString "N30"}""")
+//                |> String.concat "\n"
+//                |> eqSysPrint true;
+//                
+//                let subsFunc vId =
+//                    match Map.tryFind vId replaceMap with
+//                    | Some c -> EConst c
+//                    | None -> EVar vId
+//                // bugfix: should use `normalise` rather than `optimise` here
+//                //         because the `solveExpectedTerminationTimeExprSystem` function is strict to the shape of
+//                //         the input equation system
+//                let es = List.map (fun (i, e) -> (i, substituteVar subsFunc e)) ettPartEs in
+//                processPrint $"Final ES to solve:\n{printExprSystem es}";
+//                // todo: fix this function, let it be better -- make it possible to solve the infinite case
+//                solveExpectedTerminationTimeExprSystem es
+//        match res with
+//        | Some values -> Some values[0]
+//        | None -> None
+//    if Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM then
+//        if needApproxValue then
+//            computeValue ()
+//        else Some NUMERIC_ONE
+//    else
+//        if checkExistence () then
+//            if not needApproxValue then Some NUMERIC_ONE
+//            else computeValue ()
+//        else None
 
 type RunModel =
     | RMKPTSA of KPTSA
@@ -687,19 +686,18 @@ let genNLSatETTQueryString ettEqSys ettVarMap =
     NLSatTriggerString
     
 let ettQualitativeCheck_Raw ctx =
-    if Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM then
-        true, { ctx with ettQualitativeTime = Some TimeSpan.Zero }
-    else
-        let ettEqSys, ctx = genOrGetETTEqSys ctx in
-        logTimingMark "ettQualitative"
-        let ettVarMap = Option.get ctx.ettEqSysVarMap in
-        let z3Context, nlsatSolver = genNewZ3Context () in
-        let queryString = genNLSatETTQueryString ettEqSys ettVarMap in
-        let query = z3Context.ParseSMTLIB2String queryString in
-        let ettQualitativeTime = tapTimingMark "ettQualitative" in 
-        turnZ3SolverResultIntoBool nlsatSolver query,
-        { ctx with ettQualitativeTime = Some ettQualitativeTime }
-    
+    let ettEqSys, ctx = genOrGetETTEqSys ctx in
+    logTimingMark "ettQualitative";
+    let ettVarMap = Option.get ctx.ettEqSysVarMap in
+    let z3Context, nlsatSolver = genNewZ3Context () in
+    let queryString = genNLSatETTQueryString ettEqSys ettVarMap in
+    let query = z3Context.ParseSMTLIB2String queryString in
+    let ettQualitativeTime = tapTimingMark "ettQualitative" in
+    let res = turnZ3SolverResultIntoBool nlsatSolver query in
+    res,
+    { ctx with
+        cettQualRes = Some res
+        ettQualitativeTime = Some ettQualitativeTime }
     
 /// bisection to obtain the RAW VALUE for TP * CETT
 let rawCettBisectionApproximation ctx =
@@ -707,38 +705,41 @@ let rawCettBisectionApproximation ctx =
     let z3Ctx, nlsatSolver = genNewZ3Context () in
     let es, ctx = genOrGetETTEqSys ctx in
     let basicQuery = genNLSatETTQueryString es ctx.ettEqSysVarMap.Value in
-    nlsatSolver.Assert (z3Ctx.ParseSMTLIB2String basicQuery)
-    let accuracy = Flags.APPROX_ACCURACY in
-    let isLe numToTest =
-        checkTimeOut $"The current approximation number: {numToTest}";
-        let query =
-            z3Ctx.ParseSMTLIB2String $
-                $"(declare-const {Output.printExprVariable 0} Real)" +
-                $"(assert (<= {Output.printExprVariable 0} {Output.lispPrintProbability numToTest}))"
+    nlsatSolver.Assert (z3Ctx.ParseSMTLIB2String basicQuery);
+    if not $ turnZ3SolverResultIntoBool nlsatSolver [||] then raise $ OverflowException ()
+    else begin
+        let accuracy = Flags.APPROX_ACCURACY in
+        let isLe numToTest =
+            checkTimeOut $"The current approximation number: {numToTest}";
+            let query =
+                z3Ctx.ParseSMTLIB2String $
+                    $"(declare-const {Output.printExprVariable 0} Real)" +
+                    $"(assert (<= {Output.printExprVariable 0} {Output.lispPrintProbability numToTest}))"
+            in
+            turnZ3SolverResultIntoBool nlsatSolver query
         in
-        turnZ3SolverResultIntoBool nlsatSolver query
-    in
-    let rawCett =
-        snd $ positiveOuterBisection accuracy isLe NUMERIC_ZERO NUMERIC_ONE
-    in
-    rawCett
-    
-let pastCheck ctx =
-    if not $ Option.get ctx.tpAST then begin
-        // not AST, no need to check PAST
-        resultPrint $ REttIsPAST (Ok false);
-        ctx
+        let rawCett =
+            snd $ positiveOuterBisection accuracy isLe NUMERIC_ZERO NUMERIC_ONE
+        in
+        rawCett
     end
-    else
-        processPrint "Start checking Positive AST..."
-        let ettQualRes, ctx = ettQualitativeCheck_Raw ctx in
-        resultPrint $ REttIsPAST (Ok ettQualRes);
-        resultPrint $ REttHasVal (Ok ettQualRes);
-        resultPrint $ REttQualTime (Option.get ctx.ettQualitativeTime);
-        {
-            ctx with
-                cettQualRes = Some ettQualRes
-        }
+    
+//let pastCheck ctx =
+//    if not $ Option.get ctx.tpAST then begin
+//        // not AST, no need to check PAST
+//        resultPrint $ REttIsPAST (Ok false);
+//        ctx
+//    end
+//    else
+//        processPrint "Start checking Positive AST..."
+//        let ettQualRes, ctx = ettQualitativeCheck_Raw ctx in
+//        resultPrint $ REttIsPAST (Ok ettQualRes);
+//        resultPrint $ REttHasVal (Ok ettQualRes);
+//        resultPrint $ REttQualTime (Option.get ctx.ettQualitativeTime);
+//        {
+//            ctx with
+//                cettQualRes = Some ettQualRes
+//        }
         
 let cettQualitative ctx =
     match ctx.cettQualRes with
@@ -747,30 +748,23 @@ let cettQualitative ctx =
         processPrint "Starting checking if there is result for conditional expected termination time..."
         let res, ctx = ettQualitativeCheck_Raw ctx in
         resultPrint $ REttHasVal (Ok res);
+        // print about PAST
+        if Flags.TP_QUALITATIVE && Flags.ETT_QUALITATIVE then begin
+            match ctx.tpAST with
+            | Some isAST -> resultPrint $ REttIsPAST (Ok (res && isAST))
+            | None -> resultPrint $ REttIsPAST (Error "No result reported for AST.")
+        end;
         resultPrint $ REttQualTime (Option.get ctx.ettQualitativeTime);
-        {
-            ctx with
-                cettQualRes = Some res
-        }
+        { ctx with cettQualRes = Some res }
     
-let cettApproximation ctx =
-    if (not Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM) && ctx.cettQualRes = Some false then
-        raise $ ValueMark "Cannot compute ETT approximation: no value.";
-    let tpResVal = getTpResVal ctx in
-    let ctx =
-        match tpResVal with
-        | Some _ -> ctx
-        | None -> tpApproximation ctx
-    in
-    let tpVal = Option.get $ getTpResVal ctx in
-    if tpVal = NUMERIC_ZERO then
-        raise $ ValueMark "Cannot compute ETT approximation: approximation to termination probability is 0.";
+/// do the actual job without qualitative guard
+let cettApproximation_Raw ctx =
     let ettEqSys, ctx = genOrGetETTEqSys ctx in
     logTimingMark "cettApprox";
     let ettVarMap = Option.get ctx.ettEqSysVarMap in
     eqSysPrint Flags.DEBUG $
         $"Final ES to solve:\n{printExprSystemWithVarMap (normaliseExprSystem ettEqSys) ettVarMap}";
-    let rawRes, iterRounds =
+    let run () =
         if Flags.ETT_APPROX_BY_BISECTION then
             rawCettBisectionApproximation ctx, None
         else if Flags.ITER_BY_PREMO then
@@ -781,35 +775,98 @@ let cettApproximation ctx =
             in
             Map(res).[0], Some iterRounds
     in
-//    let str =
-//        (if ctx.tpAST = Some true then "" else "Conditional ") + 
-//            "Expected Termination Time"
-//    in
-    if Flags.ETT_APPROX_BY_BISECTION then resultPrint $ REttApproxRawValBisec rawRes
-    else resultPrint $ REttApproxRawValIter rawRes;
-    let res =
-        match ctx.tpAST with
-        | Some true -> rawRes
-        | _         -> rawRes / tpVal
+    let rawRes, iterRounds =
+        try run ()
+        with | :? OverflowException -> NUMERIC_ZERO - NUMERIC_ONE, None
     in
     let cettApproxTime = tapTimingMark "cettApprox" in
-    if Flags.ETT_APPROX_BY_BISECTION then begin
-        resultPrint $ REttApproxValBisec res;
-        resultPrint $ REttApproxTimeBisec cettApproxTime
-    end
+    let rawRes =
+        if rawRes < NUMERIC_ZERO then Error "Arithmetic Overflow Happened."
+        else Ok rawRes
+    in
+    let ctx =
+        if Flags.ETT_APPROX_BY_BISECTION then begin
+            resultPrint $ REttApproxRawValBisec rawRes;
+            resultPrint $ REttApproxTimeBisec cettApproxTime;
+            { ctx with
+                ettApproximationTimeBisec = Some cettApproxTime
+                rawCettResValBisec = match rawRes with
+                                     | Ok rr -> Some rr
+                                     | _ -> None }
+        end else begin
+            resultPrint $ REttApproxRawValIter rawRes;
+            Option.iter (resultPrint << REttApproxIterTimes) iterRounds;
+            resultPrint $ REttApproxTimeIter cettApproxTime;
+            { ctx with
+                ettApproximationTimeIter = Some cettApproxTime
+                rawCettResValIter = match rawRes with
+                                    | Ok rr -> Some rr
+                                    | _ -> None
+                ettIterationRounds = iterRounds }
+        end;
+    in
+    let printApproxVal res =
+        if Flags.ETT_APPROX_BY_BISECTION
+            then resultPrint $ REttApproxValBisec res
+            else resultPrint $ REttApproxValIter res
+    in
+    // on the actual (C)ETT value
+    if not Flags.TP_APPROXIMATION then ctx
     else begin
-        resultPrint $ REttApproxValIter res;
-        Option.iter (resultPrint << REttApproxIterTimes) iterRounds;
-        resultPrint $ REttApproxTimeIter cettApproxTime
-    end;
-    { ctx with
-        ettApproximationTimeBisec = if Flags.ETT_APPROX_BY_BISECTION then Some cettApproxTime else None
-        ettApproximationTimeIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some cettApproxTime
-        cettResValBisec = if Flags.ETT_APPROX_BY_BISECTION then Some res else None
-        cettResValIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some res
-        rawCettResValBisec = if Flags.ETT_APPROX_BY_BISECTION then Some rawRes else None
-        rawCettResValIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some rawRes
-        ettIterationRounds = iterRounds }
+        let rawRes =
+            match rawRes with
+            | Error _ -> printApproxVal rawRes; None
+            | Ok rawRes -> Some rawRes
+        in
+        let tpRes =
+            match getTpResVal ctx with
+            | None -> printApproxVal $ Error "TP approximation failed."; None
+            | Some n when n = NUMERIC_ZERO ->
+                printApproxVal $ Error "The TP approximation result is Zero. Hence (C)ETT is infinite.";
+                None
+            | Some n -> Some n
+        in
+        match rawRes, tpRes with
+        | Some rawRes, Some tpRes ->
+            let res = rawRes / tpRes in
+            printApproxVal $ Ok res;
+            { ctx with
+                cettResValBisec = if Flags.ETT_APPROX_BY_BISECTION then Some res else None
+                cettResValIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some res }
+        | _, _ -> ctx
+    end
+    
+/// the entry -- with qualitative guard
+let cettApproximation ctx =
+    if ctx.cettQualRes = Some false then
+        if Flags.ETT_APPROX_BY_BISECTION then begin
+            resultPrint $ REttApproxRawValBisec (Error "No Finite Value");
+            if Flags.TP_APPROXIMATION then
+                resultPrint $ REttApproxValBisec (Error "No Finite Value");
+            resultPrint $ REttApproxTimeBisec TimeSpan.Zero
+        end else begin
+            resultPrint $ REttApproxRawValIter (Error "No Finite Value");
+            if Flags.TP_APPROXIMATION then
+                resultPrint $ REttApproxValIter (Error "No Finite Value");
+            resultPrint $ REttApproxTimeIter TimeSpan.Zero;
+            resultPrint $ REttApproxIterTimes 0uL
+        end;
+        ctx
+    else cettApproximation_Raw ctx
+//    let ctx =
+//        if not Flags.TP_APPROXIMATION then ctx
+//        else begin
+//            ctx
+//        end
+//    in
+//    { ctx with
+//        ettApproximationTimeBisec = if Flags.ETT_APPROX_BY_BISECTION then Some cettApproxTime else None
+//        ettApproximationTimeIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some cettApproxTime
+//        cettResValBisec = if Flags.ETT_APPROX_BY_BISECTION then Some res else None
+//        cettResValIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some res
+//        rawCettResValBisec = if Flags.ETT_APPROX_BY_BISECTION then Some rawRes else None
+//        rawCettResValIter = if Flags.ETT_APPROX_BY_BISECTION then None else Some rawRes
+//        ettIterationRounds = iterRounds }
 
 // DISCARDED FUNCTION
 ///// SERIOUS PROBLEM TO THIS FUNCTIONALITY
@@ -864,21 +921,21 @@ let simplifyModel model =
     | RMPPDA ppda -> RMPPDA $ simplifyPPDA ppda
 
 let runNonModelCheck kptsa : unit =
-    processPrint "Start problem resolving..."
+    processPrint "Start problem resolving...";
     try
         let ctx = defaultRunningContext $ simplifyModel kptsa in
         if Flags.TP_RUN_BOTH_ITER_AND_BISEC then Flags.TP_APPROX_BY_BISECTION <- true;
         let ctx =
             ctx
             // termination probability (TP): approximation
-            ||> (Flags.TP_APPROXIMATION || Flags.ETT_APPROXIMATION, tpApproximation)
+            ||> (Flags.TP_APPROXIMATION, tpApproximation)
         in
         let ctx =
             if Flags.TP_RUN_BOTH_ITER_AND_BISEC then begin
                 Flags.TP_APPROX_BY_BISECTION <- false;
                 ctx
                 // termination probability (TP): approximation
-                ||> (Flags.TP_APPROXIMATION || Flags.ETT_APPROXIMATION, tpApproximation)
+                ||> (Flags.TP_APPROXIMATION, tpApproximation)
             end
             else ctx
         in
@@ -890,25 +947,24 @@ let runNonModelCheck kptsa : unit =
             // if the value is obtained by Z3 bisection and the value is 0 < p < 1,
             //      then report the result
             // otherwise, check whether it is AST and print the result directly
-            ||> (Flags.TP_QUALITATIVE || Flags.CHECK_PAST, tpQualitative) 
+            ||> (Flags.TP_QUALITATIVE, tpQualitative)
             
             // termination probability (TP): quantitative check
             ||> (Flags.TP_QUANTITATIVE_INQUIRY.IsSome, tpQuantitative) 
             
-            // ETT positive AST check --
-            // if it is AST, then check it,
-            // if there is no AST information, check AST first -- this is done in the previous step
-            ||> (Flags.CHECK_PAST, pastCheck)
+            // Now, no additional PAST will be checked, will report only if TP-QUAL & ETT-QUAL both reached
+//            // ETT positive AST check --
+//            // if it is AST, then check it,
+//            // if there is no AST information, check AST first -- this is done in the previous step
+//            ||> (Flags.CHECK_PAST, pastCheck)
             
-            // Conditional ETT: qualitative
-            // if there is already result for PAST, just return the value 
-            // if there is no PAST information
-            //      see if there is a solution for this value
-            // Also, it is the pre-condition of the previous two
-            ||> (Flags.ETT_QUALITATIVE ||
-                 (Flags.ETT_APPROXIMATION ||
-                  Flags.ETT_QUANTITATIVE_INQUIRY.IsSome) &&
-                 not Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM, cettQualitative) 
+            // Now, just depends on whether to check it
+//            // Conditional ETT: qualitative
+//            // if there is already result for PAST, just return the value 
+//            // if there is no PAST information
+//            //      see if there is a solution for this value
+//            // Also, it is the pre-condition of the previous two
+            ||> (Flags.ETT_QUALITATIVE, cettQualitative) 
         in
         
         if Flags.ETT_RUN_BOTH_ITER_AND_BISEC then Flags.ETT_APPROX_BY_BISECTION <- true;
@@ -1363,7 +1419,7 @@ let runAnExample (example : string) =
     let runCtx =
         tpApproximation runCtx
         |> tpQualitative
-        |> pastCheck
+//        |> pastCheck
         |> cettQualitative
         |> fun ctx ->
             let tpResVal = getTpResVal ctx in
@@ -1957,8 +2013,8 @@ let runAutoTableCollection
                 let tpResVal = getTpResVal x in
                 // there must be a value
                 let hasVal = x.cettQualRes = Some true && tpResVal <> Some NUMERIC_ZERO in
-                // if externally confirmed, then, even there is no need to check, just compute
-                let hasVal = hasVal || Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM in
+//                // if externally confirmed, then, even there is no need to check, just compute
+//                let hasVal = hasVal || Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM in
                 if not hasVal then Some x
                 else
                     x
@@ -2560,7 +2616,6 @@ let runPpdaCmpLaTeXTableGen () =
          f FI -> f .
          %END pPDA rules"
     in
-    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
     let examples =
         // mode of conducting sequential test on the `sequentialN` example series.
         let mapper idx = ($"{idx}", sequentialN idx) in
@@ -2653,16 +2708,12 @@ let runPpdaCmpExamples examples =
 let testRunCertExamples () =
     Flags.TP_APPROX_BY_BISECTION <- false;
     Flags.TP_QUALITATIVE <- false;
-    Flags.CHECK_PAST <- false;
-    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
     getFilesWithContent "../../../../more examples/pPDA/cert/" "txt"
     |> runPpdaCmpExamples
     
 let runGenCertExamplesTables () =
     Flags.TP_APPROX_BY_BISECTION <- false;
     Flags.TP_QUALITATIVE <- false;
-    Flags.CHECK_PAST <- false;
-    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
     getFilesWithContent "../../../../more examples/pPDA/cert/" "txt"
     |> List.map (BiMap.sndMap collectPpdaCmpRes)
     
@@ -2680,7 +2731,7 @@ let testSeqSequentialN () =
          %END pPDA config
  
          %BEGIN pPDA rules\n" +
-         $"q S -> q" + repStr n " qF" + ".
+         "q S -> q" + repStr n " qF" + ".
          q qF -> q F.
          t qF -> q F.
          f qF -> q F.
@@ -2697,98 +2748,8 @@ let testSeqSequentialN () =
     (Thread((fun () -> run ()), 104857600)).Start ()
     
     
-let private andOrTreeExample (z, y, xa, xo, has_a0, has_a1) =
-    $"let z = {z}" +
-    $"let y = {y}" +
-    $"let xa = {xa}" +
-    $"let x0 = {xo}" +
-    "" +
-    "
-    %BEGIN pPDA config
-    q0 = q0
-    gamma0 = bot
-    %END pPDA config
-
-    %BEGIN pPDA rules
-    // push an counter to start
-    q0 bot -> and_init c bot.
-
-    // done
-    " +
-    (if has_a0 then "or_return_0 bot -> q0." else "") +
-    (if has_a1 then "or_return_1 bot -> q0." else "") +
-    "
-    // rules for leaf
-    and_init c (y z)-> or_return_1.
-    and_init c (y (1 - z))-> or_return_0.
-
-    // rules for OR
-    and_init c (1 - y)-> or_init c c.
-
-    // rules for OR returns 1, call another OR or not
-    and_return_1 c (1 - xa) -> or_init c c.
-    and_return_1 c (xa) -> or_return_1.
-
-    // rules for OR returns 0, return 0
-    and_return_0 c -> or_return_0.
-
-    // OR leaf
-    or_init c (y z) -> and_return_1.
-    or_init c (y (1 - z)) -> and_return_0.
-
-    // call AND
-    or_init c (1 - y) -> and_init c c.
-
-    // if AND returns 0, decide whether to call another AND
-    or_return_0 c (1 - x0) -> and_init c c.
-    or_return_0 c (x0) -> and_return_0.
-
-    // if AND returns 1, return 1
-    or_return_1 c -> and_return_1.
-    %END pPDA rules
-    "
-    
-let private andOrTreeParams =
-    let series (x, y, z, a) =
-        [
-            x, y, z, a, true, false
-            x, y, z, a, false, true
-            x, y, z, a, true, true
-        ]
-    List.concat $ List.map series [
-        // series 1
-        "0.5", "0.4", "0.2", "0.2"
-        "0.5", "0.4", "0.2", "0.4"
-        "0.5", "0.4", "0.2", "0.6"
-        "0.5", "0.4", "0.2", "0.8"
-        // series 2
-        "0.5", "0.5", "0.1", "0.1"
-        "0.5", "0.5", "0.2", "0.1"
-        "0.5", "0.5", "0.3", "0.1"
-        "0.5", "0.5", "0.4", "0.1"
-        // series 3
-        "0.2", "0.4", "0.2", "0.2"
-        "0.3", "0.4", "0.2", "0.2"
-        "0.4", "0.4", "0.2", "0.2"
-        "0.5", "0.4", "0.2", "0.2"
-    ]
-    
-let private getAndOrTreeName (x, y, z, a, has_a0, has_a1) =
-    let postfix = $"({x},{y},{z},{a})" in
-    let prefix =
-        match has_a0, has_a1 with
-        | true, true -> "[a]"
-        | true, false -> "[a|0]"
-        | false, true -> "[a|1]"
-        | false, false -> "ERROR"
-    in
-    prefix + postfix
-    
 let runGenAndOrTreeLaTeXTables () =
-    Flags.EXTERNAL_ETT_QUALITATIVE_CONFIRM <- true;
-    let examples =
-        List.map (fun x -> (getAndOrTreeName x, andOrTreeExample x)) andOrTreeParams
-    in
+    let examples = andOrTreeExamples () in
     let ettToCollect =
         [
 //            CIEttHasVal
@@ -2826,4 +2787,13 @@ let runGenAndOrTreeLaTeXTables () =
     println $ "TP:\n" + convTpTab + "\nETT:\n" + convEttTab
     println "-------------------- Direct Method --------------------"
     println $ "TP:\n" + dirTpTab + "\nETT:\n" + dirEttTab
+    
+let genAndOrTreeExampleFiles () =
+    let dir = "../../../../more examples/pPDA/and-or-tree/" in
+    let iter (name, content) =
+        let path = Path.Join(dir, name + ".txt") in
+        File.WriteAllText(path, content)
+    in
+    andOrTreeExamples ()
+    |> List.iter iter
     
