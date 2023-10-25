@@ -1006,7 +1006,7 @@ let produceModel defs (probModel : ParseModel) =
             }
         | ModelPPDA (ppdaConfig, ppdaRules) ->
             resultPrint $ RReadFormat "pPDA";
-            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "pPDA" else "rPTSA");
+            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "Direct pPDA" else "Convert to rPTSA");
             Flags.CHECK_K <- false;
             // qX |-> s
             let maybeMap = flip Option.map draMapping $
@@ -1028,7 +1028,7 @@ let produceModel defs (probModel : ParseModel) =
                 ret
         | ModelPBPA (gamma0, pbpaRules) ->
             resultPrint $ RReadFormat "pBPA";
-            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "pBPA" else "rPTSA");
+            resultPrint $ RCopeMode (if Flags.DIRECT_PPDA then "Direct pBPA" else "Convert to rPTSA");
             Flags.CHECK_K <- false;
             // X |-> s
             let maybeMap = flip Option.map draMapping $
