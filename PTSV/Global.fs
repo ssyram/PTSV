@@ -75,13 +75,13 @@ type NumericType =
         (NumericType i) / r
     static member (/) (r : NumericType, i : int) =
         r / (NumericType i)
-    static member (+) (r1 : NumericType, r2 : NumericType) =
+    static member (+) (r1 : NumericType, r2 : NumericType) : NumericType =
         NumericType (r1.getR () + r2.getR ()).CanonicalForm
-    static member (*) (r1 : NumericType, r2 : NumericType) =
+    static member (*) (r1 : NumericType, r2 : NumericType) : NumericType =
         NumericType (r1.getR () * r2.getR ()).CanonicalForm
-    static member (-) (r1 : NumericType, r2 : NumericType) =
+    static member (-) (r1 : NumericType, r2 : NumericType) : NumericType =
         NumericType (r1.getR () - r2.getR ()).CanonicalForm
-    static member (/) (r1 : NumericType, r2 : NumericType) =
+    static member (/) (r1 : NumericType, r2 : NumericType) : NumericType =
         if r2.getR () = Rational.Zero then
             failwith "Try dividing 0."
         NumericType (r1.getR () / r2.getR ()).CanonicalForm
@@ -257,10 +257,10 @@ type FinalResult =
     | REttQualTime of TimeSpan
     | REttHasVal of Result<bool, string>  // either the result or the error message
     | REttIsPAST of Result<bool, string>  // either the result or the error message
+    | RCondEttApproxValBisec of Result<NumericType, string>
+    | RCondEttApproxValIter of Result<NumericType, string>
     | REttApproxValBisec of Result<NumericType, string>
     | REttApproxValIter of Result<NumericType, string>
-    | REttApproxRawValBisec of Result<NumericType, string>
-    | REttApproxRawValIter of Result<NumericType, string>
     | REttApproxIterTimes of uint64
     | REttApproxTimeBisec of TimeSpan
     | REttApproxTimeIter of TimeSpan
@@ -276,6 +276,7 @@ type FinalResult =
             | "eq" -> "equation system"
             | "sys" -> ""  // it is declared above
             | "cons" -> "construction"
+            | "cond" -> "conditional"
             | "time" -> "time"
             | "approx" -> "approximation"
             | "qual" -> "qualitative"

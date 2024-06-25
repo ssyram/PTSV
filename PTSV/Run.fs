@@ -786,7 +786,7 @@ let cettApproximation_Raw ctx =
     in
     let ctx =
         if Flags.ETT_APPROX_BY_BISECTION then begin
-            resultPrint $ REttApproxRawValBisec rawRes;
+            resultPrint $ REttApproxValBisec rawRes;
             resultPrint $ REttApproxTimeBisec cettApproxTime;
             { ctx with
                 ettApproximationTimeBisec = Some cettApproxTime
@@ -794,7 +794,7 @@ let cettApproximation_Raw ctx =
                                      | Ok rr -> Some rr
                                      | _ -> None }
         end else begin
-            resultPrint $ REttApproxRawValIter rawRes;
+            resultPrint $ REttApproxValIter rawRes;
             Option.iter (resultPrint << REttApproxIterTimes) iterRounds;
             resultPrint $ REttApproxTimeIter cettApproxTime;
             { ctx with
@@ -807,8 +807,8 @@ let cettApproximation_Raw ctx =
     in
     let printApproxVal res =
         if Flags.ETT_APPROX_BY_BISECTION
-            then resultPrint $ REttApproxValBisec res
-            else resultPrint $ REttApproxValIter res
+            then resultPrint $ RCondEttApproxValBisec res
+            else resultPrint $ RCondEttApproxValIter res
     in
     // on the actual (C)ETT value
     if not Flags.TP_APPROXIMATION then ctx
@@ -840,14 +840,14 @@ let cettApproximation_Raw ctx =
 let cettApproximation ctx =
     if ctx.cettQualRes = Some false then
         if Flags.ETT_APPROX_BY_BISECTION then begin
-            resultPrint $ REttApproxRawValBisec (Error "No Finite Value");
+            resultPrint $ REttApproxValBisec (Error "No Finite Value");
             if Flags.TP_APPROXIMATION then
-                resultPrint $ REttApproxValBisec (Error "No Finite Value");
+                resultPrint $ RCondEttApproxValBisec (Error "No Finite Value");
             resultPrint $ REttApproxTimeBisec TimeSpan.Zero
         end else begin
-            resultPrint $ REttApproxRawValIter (Error "No Finite Value");
+            resultPrint $ REttApproxValIter (Error "No Finite Value");
             if Flags.TP_APPROXIMATION then
-                resultPrint $ REttApproxValIter (Error "No Finite Value");
+                resultPrint $ RCondEttApproxValIter (Error "No Finite Value");
             resultPrint $ REttApproxTimeIter TimeSpan.Zero;
             resultPrint $ REttApproxIterTimes 0uL
         end;
