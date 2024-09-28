@@ -1,0 +1,25 @@
+{
+  "name": "ptsv",
+  "displayName": "PTSV",
+  "description": "Syntactic Support for Probabilistic Tree-Stack Verifier (PTSV)",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "ptsv",
+      "aliases": ["PTSV", "ptsv"],
+      "extensions": [".ptsv"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "ptsv",
+      "scopeName": "source.ptsv",
+      "path": "./syntaxes/ptsv.tmLanguage.json"
+    }]
+  }
+}
