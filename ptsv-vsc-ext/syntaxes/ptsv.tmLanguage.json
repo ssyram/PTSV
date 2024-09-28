@@ -246,14 +246,7 @@
 				"captures": {
 					"1" : { "name" : "entity.name.class" },
 					"2" : { "name" : "entity.name.function" },
-					"3" : {
-						"patterns": [
-							{ 
-								"name": "constant.numeric",
-								"match": "\\b\\d+(\\.\\d+)?\\b"
-							}
-						]
-					},
+					"3" : { "name" : "string.quoted.double" },
 					"4" : { "name" : "entity.name.class" },
 					"5" : { "name" : "entity.name.function" }
 				}
@@ -263,15 +256,13 @@
 				"match": "\\b([a-zA-Z_][a-zA-Z0-9_']*)\\s*(\\([^>]*\\))?\\s*->\\s*((\\b\\s*[a-zA-Z_][a-zA-Z0-9_']*)*)\\s*\\.",
 				"captures": {
 					"1" : { "name" : "entity.name.function" },
-					"2" : {
-						"patterns": [ { "include": "numeric" } ]
-					},
+					"2" : { "name" : "string.quoted.double" },
 					"3" : { "name" : "entity.name.function" }
 				}
 		},
 		"function_definition" : {
 			"name": "function.definition.ptsv",
-			"begin": "\\b([a-zA-Z_][a-zA-Z0-9_']*)\\b\\s*([a-zA-Z0-9_\\s]*)\\s*(\\([^:=]*)?\\s*(:=|=)\\s*",
+			"begin": "\\b([a-zA-Z_][a-zA-Z0-9_']*)\\b\\s*([a-zA-Z0-9_\\s]*)\\s*(\\([^:=%]*)?\\s*(:=|=)\\s*",
 			"end": "\\.|;|%",
 			"beginCaptures": {
 					"1": {
@@ -279,6 +270,9 @@
 					},
 					"2": {
 							"name": "variable.parameter.ptsv"
+					},
+					"3": {
+						"name": "string.quoted.double"
 					}
 			},
 			"patterns": [
@@ -297,11 +291,11 @@
 		},
 		"ppda_op_rule": {
 			"name": "ppda.match",
-			"match": "\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,(\\s*[^,\\)%]*\\s*,)?\\s*((Top|\\\\[Tt]op|\\\\[Oo]mega)|([a-zA-Z_][a-zA-Z0-9_']*)|\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([Pp][Uu][Ss][Hh]|[Pp][Oo][Pp])\\s*([a-zA-Z_][a-zA-Z0-9_']*)?\\s*\\))\\s*\\)",
+			"match": "\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,(?:\\s*([^,%]*)\\s*,)?\\s*((Top|\\\\[Tt]op|\\\\[Oo]mega)|([a-zA-Z_][a-zA-Z0-9_']*)|\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([Pp][Uu][Ss][Hh]|[Pp][Oo][Pp])\\s*([a-zA-Z_][a-zA-Z0-9_']*)?\\s*\\))\\s*\\)",
 			"captures" : {
 				"1" : { "name" : "entity.name.class" },
 				"2" : { "name" : "entity.name.function" },
-				"3" : { "patterns": [ { "include": "#numeric" } ] },
+				"3" : { "name" : "string.quoted.double" },
 				"5" : { "patterns": [ { "include": "#top_omega" } ] },
 				"6" : { "name" : "entity.name.class" },
 				"7" : { "name" : "entity.name.class" },
@@ -332,12 +326,12 @@
 		},
 		"rptsa_rule": {
 			"name": "5-tuple.match",
-			"match": "\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,(\\s*[^,\\)%]*\\s*,)?\\s*((Top|\\\\[Tt]op|\\\\[Oo]mega)|([a-zA-Z_][a-zA-Z0-9_']*)|\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([Uu][Pp]|[Dd][Oo][Ww][Nn])\\s*([a-zA-Z_][a-zA-Z0-9_']*)?\\s*\\))\\s*\\)",
+			"match": "\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,(?:\\s*([^,%]*)\\s*,)?\\s*((Top|\\\\[Tt]op|\\\\[Oo]mega)|([a-zA-Z_][a-zA-Z0-9_']*)|\\(\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([Uu][Pp]|[Dd][Oo][Ww][Nn])\\s*([a-zA-Z_][a-zA-Z0-9_']*)?\\s*\\))\\s*\\)",
 			"captures" : {
 				"1" : { "name" : "entity.name.class" },
 				"2" : { "name" : "variable.parameter" },
 				"3" : { "name" : "entity.name.function" },
-				"4" : { "patterns": [ { "include": "#numeric" } ] },
+				"4" : { "name" : "string.quoted.double" },
 				"6" : { "patterns": [ { "include": "#top_omega" } ] },
 				"7" : { "name" : "entity.name.class" },
 				"8" : { "name" : "entity.name.class" },
