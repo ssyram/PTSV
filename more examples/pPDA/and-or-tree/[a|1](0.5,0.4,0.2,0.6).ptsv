@@ -1,4 +1,7 @@
-let z = 0.5let y = 0.4let xa = 0.2let x0 = 0.6
+let z = 0.5
+let y = 0.4
+let xa = 0.2
+let x0 = 0.6
     %BEGIN pPDA config
     q0 = q0
     gamma0 = bot
