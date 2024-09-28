@@ -50,6 +50,8 @@ rule token = parse
 | "("                                   { LPAREN }
 | ")"                                   { RPAREN }
 | "(*)"                                 { STAR_MARK }
+| "(*"                                  { STAR_START }
+| "*)"                                  { STAR_TERMINATE }
 | "\\pi"                                { PROJECT }
 | "<"                                   { LANGLE }
 | ">"                                   { RANGLE }
@@ -79,7 +81,7 @@ rule token = parse
 | "!="                                  { NEQ }
 | "/="                                  { NEQ }
 | "<>"                                  { NEQ }
-| "(*"                                  {
+| "/*"                                  {
         if commenting then AND  // just for returning something
         else
             commenting <- true;
@@ -87,7 +89,7 @@ rule token = parse
             commenting <- false;
             token lexbuf
     }
-| "*)"                                  { END_BLOCK_COMMENTING }
+| "*/"                                  { END_BLOCK_COMMENTING }
 | "//"                                  {
         if commenting then AND  // just for returning something
         else

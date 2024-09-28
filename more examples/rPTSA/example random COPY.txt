@@ -1,0 +1,38 @@
+// example for {w#w | w \in (A|B)*} 
+// termination probability should be: pT / (1 - (pA^2 + pB^2))
+// expected termination time should be: pT * (1 + pA^2 + pB^2) / (1 - (pA^2 + pB^2))^2
+
+let pA := 0.7
+let pB := 0.2
+let pT := 1 - pA - pB
+
+%BEGIN rPTSA config
+restriction := 2
+q0 := qF
+m0 := mE
+gamma0 := bt
+%END rPTSA config
+
+%BEGIN rPTSA rules
+// bottom rule: relaying
+(qF, mE, bt, 1,  (qF, mF, up gs))
+
+// the first string
+(qF, mE, gs, pA, (qF, mA, up gs))(*)
+(qF, mE, gs, pB, (qF, mB, up gs))(*)
+(qF, mE, gs, pT, (qD, mT, down))(*)  // the '#' symbol
+(qD, mA, gs, 1,  (qD, mA, down))
+(qD, mB, gs, 1,  (qD, mB, down))
+
+// bottom rule: relaying to the second string
+(qD, mF, bt, 1,  (qS, mS, up gs))
+
+// the second string
+(qS, mA, gs, pA, (qS, mR, up gs))(*)
+(qS, mB, gs, pB, (qS, mR, up gs))(*)
+(qS, mT, gs, 1,  (qD, mR, down))
+(qD, mR, gs, 1,  (qD, mR, down))
+
+// bottom rule: termination
+(qD, mS, bt, 1,  (qD, mR, down))
+%END rPTSA rules

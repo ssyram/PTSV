@@ -446,10 +446,22 @@ type RPTSARule =
         m:string *
         gamma:string *
         prob:ParseExpr *
-        op:TransOp<string, string, string, TerOp>
+        op:TransOp<string, string, string, TerOp> *
+        score:Option<ParseExpr>
+    override x.ToString () =
+        match x with
+        | RPTSARule (q, m, g, pExpr, op, score) ->
+            let bs = $"({q}, {m}, {g}, {pExpr}, {op})" in
+            let score =
+                match score with
+                | None -> ""
+                | Some v when v = PEConst NUMERIC_ONE -> "(*)"
+                | Some v -> $"(*{v}*)"
+            in
+            bs + score
     member x.toKPTSARule stateTable memoryTable gammaTable macroDefs =
         match x with
-        | RPTSARule (q, m, g, pExpr, op) ->
+        | RPTSARule (q, m, g, pExpr, op, _) ->
             (IndexingTable.lookup stateTable q,
              IndexingTable.lookup memoryTable m,
              IndexingTable.lookup gammaTable g,
@@ -462,7 +474,7 @@ type RPTSARule =
         
 let flattenProbStateList q m gamma lst =
     flip List.map lst $ fun (probExpr, q') ->
-        RPTSARule (q, m, gamma, probExpr, OpTransState q')
+        RPTSARule (q, m, gamma, probExpr, OpTransState q', None)
 
 // ---------------------------------- rPTSA End ----------------------------------
 
@@ -829,6 +841,78 @@ let pBPAToDirectPPDA macroDefs gamma0 pbpaRules =
     
     
     
+/// generating the primitive step counts while also checking duplicity
+/// ALL DUPLICATIONS are assumed to be user input ERRORS
+/// Besides, probability exceeding 1 is also considered an ERROR
+let primStepCountsAndValidityCheck rules macros =
+    let visited = HashSet<_> () in
+    let statProb = HashMap<_,_> () in
+    let psc = HashMap<_,_> () in
+    let iter (RPTSARule (q, m, g, p, op, score) as r) =
+        let reportWhen cond msg =
+            if cond then
+                failwith $"When checking rule: {r}, error found: {msg}."
+        in
+        // check validity
+        // 1. score >= 0 if exists
+        match score with
+        | None -> ()
+        | Some v -> begin
+            // add score if exists
+            let v = v.eval macros in
+            HashMap.add (q,m,g,op) v psc;
+            reportWhen (v < NUMERIC_ZERO) $"score {v} should be >= 0"
+        end;
+        // 2. duplication
+        reportWhen (not $ visited.Add (q,m,g,op))
+            $"Duplication Definition Found for: {(q,m,g,op)}";
+        // 3. probability >= 0 && probability sum <= 1
+        let p = p.eval macros in
+        reportWhen (p < NUMERIC_ZERO) "Probability is < 0"
+        match HashMap.tryFind (q,m,g) statProb with
+        | None -> HashMap.add (q,m,g) p statProb
+        | Some op ->
+            let p = op + p in
+            reportWhen (p > NUMERIC_ONE)
+                $"Total probability for status: {(q,m,g)} is {p} > 1";
+            HashMap.add (q,m,g) p statProb
+    in
+    List.iter iter rules;
+    psc
+    
+let genRulesAndStepCounts rptsaRules qIdxMap mIdxMap gIdxMap macroDefs =
+    // checking duplicity -- duplicating a rule is assumed to be a user input error
+    let primitiveStepCounts = primStepCountsAndValidityCheck rptsaRules macroDefs in
+    let rules =
+        flip List.map rptsaRules (fun x -> x.toKPTSARule qIdxMap mIdxMap gIdxMap macroDefs)
+        |> aggregateList (fun (q, m, g, p, op) -> ((q, m, g), (p, op)))
+        // combine duplicated items
+        |> List.map (fun (_, _, g as config, x) ->
+            aggregateList swap x
+            |> List.map (BiMap.sndMap (List.reduce (+)))
+            |> List.map swap
+            |> List.map (fun (prob, op as x) ->
+                match op with
+                | TransDown _ when g = 0 -> (prob, TransTer)
+                | _ -> x)
+            |> fun lst -> (config, lst))
+        |> Map.ofList
+    in
+    let stepCounts =
+        flip Seq.map primitiveStepCounts (fun ((q,m,g,op),count) ->
+            ((IndexingTable.lookup qIdxMap q,
+              IndexingTable.lookup mIdxMap m,
+              IndexingTable.lookup gIdxMap g,
+              op.toKPTSATransOp
+                (IndexingTable.lookup qIdxMap)
+                (IndexingTable.lookup mIdxMap)
+                (IndexingTable.lookup gIdxMap)
+                (function | SpTer -> TransTer | SpDiv -> TransDiv)),count))
+        |> Map.ofSeq
+        |> fun x -> if Map.count x > 0 then Some x else None
+    in
+    (rules, stepCounts)
+    
     
 // currently, ignore the constraint definitions
 let produceModel defs (probModel : ParseModel) =
@@ -929,20 +1013,7 @@ let produceModel defs (probModel : ParseModel) =
             let (RPTSAConfig (k, q0, m0, gamma0)) = rptsaConfig in
             let qIdxMap, mIdxMap, gIdxMap = IndexingTable q0, IndexingTable m0, IndexingTable gamma0 in
             resultPrint $ RReadFormat $"{k}-PTSA";
-            let rules =
-                flip List.map rptsaRules (fun x -> x.toKPTSARule qIdxMap mIdxMap gIdxMap macroDefs)
-                |> aggregateList (fun (q, m, g, p, op) -> ((q, m, g), (p, op)))
-                // combine duplicated items
-                |> List.map (fun (_, _, g as config, x) ->
-                    aggregateList swap x
-                    |> List.map (BiMap.sndMap (List.reduce (+)))
-                    |> List.map swap
-                    |> List.map (fun (prob, op as x) ->
-                        match op with
-                        | TransDown _ when g = 0 -> (prob, TransTer)
-                        | _ -> x)
-                    |> fun lst -> (config, lst))
-                |> Map.ofList in
+            let rules, stepCount = genRulesAndStepCounts rptsaRules qIdxMap mIdxMap gIdxMap macroDefs in
             // check validity
             Map.toSeq rules
             |> Seq.iter (fun ((q, m, g), lst) ->
@@ -983,7 +1054,7 @@ let produceModel defs (probModel : ParseModel) =
                 maxLocalMemory = mIdxMap.getNextIndex ();
                 maxGamma = gIdxMap.getNextIndex ();
                 delta = rules;
-                stepCount = None;
+                stepCount = stepCount;
                 kMap = None;
                 stateDependencies = None;
             }

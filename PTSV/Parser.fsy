@@ -22,7 +22,7 @@ open PTSV.Utils
 %token ERROR
 %token BEGINT ENDT BASE_TYPE IMPLY LANGLE RANGLE AND COLON END_RULE PROJECT LET PLUS MINUS MULTIPLY DIVIDE
 %token LSQRBKT RSQRBKT
-%token STAR_MARK
+%token STAR_MARK STAR_START STAR_TERMINATE
 
 %type < PTSV.ParserSupport.ParseResult > file
 %type < PTSV.ParserSupport.ParseType > linear_type
@@ -189,11 +189,18 @@ rptsa_rule_lines :
   | rptsa_rule rptsa_rule_lines { List.append $1 $2 }
 
 rptsa_rule :
-    LPAREN ident COMMA ident COMMA ident COMMA number_expr COMMA transop RPAREN { [RPTSARule ($2, $4, $6, $8, $10)] }
-  | LPAREN ident COMMA ident COMMA ident COMMA transop RPAREN { [RPTSARule ($2, $4, $6, (PEConst NUMERIC_ONE), $8)] }
+    LPAREN ident COMMA ident COMMA ident COMMA number_expr COMMA transop RPAREN score
+    { [RPTSARule ($2, $4, $6, $8, $10, $12)] }
+  | LPAREN ident COMMA ident COMMA ident COMMA transop RPAREN score
+    { [RPTSARule ($2, $4, $6, (PEConst NUMERIC_ONE), $8, $10)] }
   | LPAREN ident COMMA ident COMMA ident COMMA LSQRBKT prob_state_list RSQRBKT RPAREN { 
     flattenProbStateList $2 $4 $6 $9  // generate a list of rules according to the prob_state_list
   }
+  
+score : 
+      { None }
+  | STAR_MARK { Some (PEConst NUMERIC_ONE) }
+  | STAR_START number_expr STAR_TERMINATE { Some $2 }
   
 transop :
     ident            { OpTransState $1 }

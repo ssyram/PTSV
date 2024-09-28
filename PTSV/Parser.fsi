@@ -2,6 +2,8 @@
 module Parser
 type token = 
   | STAR_MARK
+  | STAR_START
+  | STAR_TERMINATE
   | LSQRBKT
   | RSQRBKT
   | BEGINT
@@ -62,6 +64,8 @@ type token =
   | ID of ( string )
 type tokenId = 
     | TOKEN_STAR_MARK
+    | TOKEN_STAR_START
+    | TOKEN_STAR_TERMINATE
     | TOKEN_LSQRBKT
     | TOKEN_RSQRBKT
     | TOKEN_BEGINT
@@ -151,6 +155,7 @@ type nonTerminalId =
     | NONTERM_str_gen_transop
     | NONTERM_rptsa_rule_lines
     | NONTERM_rptsa_rule
+    | NONTERM_score
     | NONTERM_transop
     | NONTERM_prob_state_list
     | NONTERM_prob_state_item
