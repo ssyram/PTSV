@@ -133,6 +133,7 @@
 			"patterns": [
 				{ "include": "#rptsa_count" },
 				{ "include": "#rptsa_rule" },
+				{ "include": "#rptsa_str_rule" },
 				{ "include": "#comments" }
 			]
 		},
@@ -311,6 +312,23 @@
 		"rptsa_count" : {
 			"name" : "keyword.control",
 			"match": "\\(\\*\\)|\\(\\*\\s*\\d+(\\.\\d+)?\\s*\\*\\)"
+		},
+		"rptsa_str_rule" : {
+			"name" : "rptsa.str.rule",
+			"match": "([a-zA-Z_][a-zA-Z0-9_']*)\\b\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\b\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*->\\s*((Top|\\\\[Tt]op|\\\\[Oo]mega)|([a-zA-Z_][a-zA-Z0-9_']*)|(\"(?:\\\\.|[^\"\\\\])*\")\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)|([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([a-zA-Z_][a-zA-Z0-9_']*)\\s*,\\s*([Uu][Pp]|[Dd][Oo][Ww][Nn])\\b\\s*([a-zA-Z_][a-zA-Z0-9_']*)?)\\.",
+			"captures": {
+				"1" : { "name" : "entity.name.class" },
+				"2" : { "name" : "variable.parameter" },
+				"3" : { "name" : "entity.name.function" },
+				"5" : { "patterns": [ { "include": "#top_omega" } ] },
+				"6" : { "name" : "entity.name.class" },
+				"7" : { "name" : "string.quoted.double" },
+				"8" : { "name" : "entity.name.class" },
+				"9" : { "name" : "entity.name.class" },
+				"10" : { "name" : "variable.parameter" },
+				"11" : { "name" : "constant.language" },
+				"12" : { "name" : "entity.name.function" }
+			}
 		},
 		"rptsa_rule": {
 			"name": "5-tuple.match",
