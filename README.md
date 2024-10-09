@@ -1,6 +1,6 @@
 # Probabilistic Tree-Stack Verifier (PTSV)
 A tool for analysing termination probability and expected termination time of rPTSA and PAHORS.
-The VSCode syntactic extension also attached in `ptsv-vsc-ext`.
+The VSCode syntactic extension is also attached in `ptsv-vsc-ext`.
 
 ## Build from Docker
 The easiest way to run the project is running from Docker.
